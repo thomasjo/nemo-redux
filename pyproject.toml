@@ -1,0 +1,45 @@
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
+
+[tool.poetry]
+name = "nemo-redux"
+version = "0.1.0"
+description = ""
+authors = ["Thomas Johansen <thomasjo@gmail.com>"]
+
+[tool.poetry.dev-dependencies]
+flake8 = "^3.8.3"
+flake8-isort = "^3.0.0"
+isort = { version = "^4.3.21", extras = ["pyproject"] }
+rope = "^0.17.0"
+yapf = "^0.30.0"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+future = "^0.18.2"
+matplotlib = "^3.2.2"
+numpy = "^1.19.0"
+pillow = "^7.1.2"
+pytorch-ignite = "^0.4.0"
+pytorch-lightning = "^0.8.3"
+scipy = "^1.5.0"
+torchsummary = "^1.5.1"
+tqdm = "^4.47.0"
+wandb = "^0.9.1"
+
+# PyTorch is expected to be supplied by the container image.
+torch = { version = "^1.5.1", optional = true }
+torchvision = { version = "^0.6.1", optional = true }
+
+[tool.poetry.extras]
+torch = ["torch", "torchvision"]
+
+[tool.isort]
+force_grid_wrap = 0
+include_trailing_comma = true
+line_length = 999
+lines_after_imports = 2
+lines_between_types = 1
+multi_line_output = 3
+use_parentheses = true
