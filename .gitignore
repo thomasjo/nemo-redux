@@ -1,0 +1,9 @@
+.venv
+.vscode
+
+# Project-specific.
+/data
+/output
+
+# PyTorch Lightning nonsense...
+/lightning_logs
