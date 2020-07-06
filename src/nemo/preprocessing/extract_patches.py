@@ -209,8 +209,6 @@ def extract_patches(
             # Save bounding box image.
             save_image(output_file, image_bbox, postfix="bbox")
 
-        exit(1)
-
 
 def parse_args():
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
