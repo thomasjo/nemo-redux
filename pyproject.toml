@@ -17,6 +17,11 @@ yapf = "^0.30.0"
 
 [tool.poetry.dependencies]
 python = "^3.8"
+
+# PyTorch is expected to be supplied by the container image.
+torch = { version = "^1.5.1", optional = true }
+torchvision = { version = "^0.6.1", optional = true }
+
 future = "^0.18.2"
 matplotlib = "^3.2.2"
 numpy = "^1.19.0"
@@ -28,10 +33,6 @@ scipy = "^1.5.0"
 torchsummary = "^1.5.1"
 tqdm = "^4.47.0"
 wandb = "^0.9.1"
-
-# PyTorch is expected to be supplied by the container image.
-torch = { version = "^1.5.1", optional = true }
-torchvision = { version = "^0.6.1", optional = true }
 
 [tool.poetry.extras]
 torch = ["torch", "torchvision"]
