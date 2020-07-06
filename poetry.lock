@@ -311,6 +311,17 @@ signedtoken = ["cryptography", "pyjwt (>=1.0.0)"]
 
 [[package]]
 category = "main"
+description = "Wrapper package for OpenCV python bindings."
+name = "opencv-python"
+optional = false
+python-versions = "*"
+version = "4.3.0.36"
+
+[package.dependencies]
+numpy = ">=1.11.1"
+
+[[package]]
+category = "main"
 description = "File system general utilities"
 name = "pathtools"
 optional = false
@@ -513,7 +524,7 @@ description = "SciPy: Scientific Library for Python"
 name = "scipy"
 optional = false
 python-versions = ">=3.6"
-version = "1.5.0"
+version = "1.5.1"
 
 [package.dependencies]
 numpy = ">=1.14.5"
@@ -524,7 +535,7 @@ description = "Python client for Sentry (https://getsentry.com)"
 name = "sentry-sdk"
 optional = false
 python-versions = "*"
-version = "0.15.1"
+version = "0.16.0"
 
 [package.dependencies]
 certifi = "*"
@@ -532,7 +543,7 @@ urllib3 = ">=1.10.0"
 
 [package.extras]
 aiohttp = ["aiohttp (>=3.5)"]
-beam = ["beam (>=2.12)"]
+beam = ["apache-beam (>=2.12)"]
 bottle = ["bottle (>=0.12.13)"]
 celery = ["celery (>=3)"]
 django = ["django (>=1.8)"]
@@ -771,7 +782,7 @@ version = "0.30.0"
 torch = ["torch", "torchvision"]
 
 [metadata]
-content-hash = "31e83ea5227ad3c5b237901e40cd26b98dfe6139d81650cae8fbb7f6388719d4"
+content-hash = "b121993f90c60b022f7c6fafd506a42f87a48a3b3419729802c62b4ead6585f4"
 python-versions = "^3.8"
 
 [metadata.files]
@@ -959,6 +970,27 @@ oauthlib = [
     {file = "oauthlib-3.1.0-py2.py3-none-any.whl", hash = "sha256:df884cd6cbe20e32633f1db1072e9356f53638e4361bef4e8b03c9127c9328ea"},
     {file = "oauthlib-3.1.0.tar.gz", hash = "sha256:bee41cc35fcca6e988463cacc3bcb8a96224f470ca547e697b604cc697b2f889"},
 ]
+opencv-python = [
+    {file = "opencv_python-4.3.0.36-cp35-cp35m-manylinux2014_i686.whl", hash = "sha256:c4f1e9d963c8f370284afa87fcf521cc8439a610a500bf8ede27fd64dd9050bd"},
+    {file = "opencv_python-4.3.0.36-cp35-cp35m-manylinux2014_x86_64.whl", hash = "sha256:55e1d7a2d11c40ea5b53aabe5c4122038803c7d492505c8f93af077aa7fe2ce1"},
+    {file = "opencv_python-4.3.0.36-cp35-cp35m-win32.whl", hash = "sha256:76ddc6daf8607eda1d866395dcf98526ef96f3e616d8c37ccc7629f9aaf6d4d4"},
+    {file = "opencv_python-4.3.0.36-cp35-cp35m-win_amd64.whl", hash = "sha256:2fe704e35808cf6b17b793e89fd00e9ef7779f85f274666a4e092671aedd09c0"},
+    {file = "opencv_python-4.3.0.36-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:2ec6502bfac01b27ac06daf7bc9f7a4f482a6a0d8e1b30e15c411d478454a19f"},
+    {file = "opencv_python-4.3.0.36-cp36-cp36m-manylinux2014_i686.whl", hash = "sha256:f67c1d92ff96c6c106f786b7ef9b9ab448fa03ef28cb7bb6f0f7b857b65bc158"},
+    {file = "opencv_python-4.3.0.36-cp36-cp36m-manylinux2014_x86_64.whl", hash = "sha256:c93b1198c85175a9fa9a9839c4da55c7ab9c5f57256f2e4211cd6c91d7d422e8"},
+    {file = "opencv_python-4.3.0.36-cp36-cp36m-win32.whl", hash = "sha256:1bf486680a16d739f7852a62865b72eb7692df584694815774ba97b471b8bc3f"},
+    {file = "opencv_python-4.3.0.36-cp36-cp36m-win_amd64.whl", hash = "sha256:f6fa2834d85c78865ca6e3de563916086cb8c83c3f2ef80924fcd07005f05df9"},
+    {file = "opencv_python-4.3.0.36-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:fa1a6d149a1a5e0bc54c737a59fe38d75384a092ae5e35f9b876fbb621f755c6"},
+    {file = "opencv_python-4.3.0.36-cp37-cp37m-manylinux2014_i686.whl", hash = "sha256:4b93b5f8df187e4dba9fb25c46fa8cf342c257de144f7c86d75c06416566a199"},
+    {file = "opencv_python-4.3.0.36-cp37-cp37m-manylinux2014_x86_64.whl", hash = "sha256:fd457deedcf153dd6805a2b4d891ac2a0969566d3755fbf48a3ffb53978c9ed1"},
+    {file = "opencv_python-4.3.0.36-cp37-cp37m-win32.whl", hash = "sha256:ef4ac758a4e2caee80ef9c86b83a279d6f132c9e7ae77957cf74013928814e05"},
+    {file = "opencv_python-4.3.0.36-cp37-cp37m-win_amd64.whl", hash = "sha256:d765c44827778cbe6bc8f272cd61514e8509b93fd24dd3324cd4abddf2026b11"},
+    {file = "opencv_python-4.3.0.36-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:677f61332436e22f83a1e4e6f6863a760734fbc8029ba6a8ef0af4554cde6f93"},
+    {file = "opencv_python-4.3.0.36-cp38-cp38-manylinux2014_i686.whl", hash = "sha256:eb709245e56f6693d297f8818ff8e6c017fa80fdb5a923c64be623a678c7150e"},
+    {file = "opencv_python-4.3.0.36-cp38-cp38-manylinux2014_x86_64.whl", hash = "sha256:210ab40c8c9dadc7dc9ed7beebe2e0a2415a744f8d6857762a80c8e0fcc477c8"},
+    {file = "opencv_python-4.3.0.36-cp38-cp38-win32.whl", hash = "sha256:156e2954d5b38b676e8a24d66703cf15f252e24ec49db7e842a8b5eed46074ba"},
+    {file = "opencv_python-4.3.0.36-cp38-cp38-win_amd64.whl", hash = "sha256:1ea08f22246ccd33174d59edfa3f13930bf2c28096568242090bd9d8770fb8a8"},
+]
 pathtools = [
     {file = "pathtools-0.1.2.tar.gz", hash = "sha256:7c35c5421a39bb82e58018febd90e3b6e5db34c5443aaaf742b3f33d4655f1c0"},
 ]
@@ -1111,26 +1143,26 @@ rsa = [
     {file = "rsa-4.6.tar.gz", hash = "sha256:109ea5a66744dd859bf16fe904b8d8b627adafb9408753161e766a92e7d681fa"},
 ]
 scipy = [
-    {file = "scipy-1.5.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:8f354e92246de33c44ddfc5fef61bce8c19d5aeeb2130b6a672b15db619453e4"},
-    {file = "scipy-1.5.0-cp36-cp36m-manylinux1_i686.whl", hash = "sha256:244b4a23a8cb6707e19f5579502112954659bb983852b1c381243fe46d9b6818"},
-    {file = "scipy-1.5.0-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:d266d955c3fd12336c948abb368de230bf8dc20efad428abb908165d9c87f53f"},
-    {file = "scipy-1.5.0-cp36-cp36m-win32.whl", hash = "sha256:11d8bfcea08e971968d07495bdf1de37b3b1bb5ca78e4ddbe8d60791f0456942"},
-    {file = "scipy-1.5.0-cp36-cp36m-win_amd64.whl", hash = "sha256:eb48915142f2dbd4b84df8ca66e433946df1a13eff36015c2b7843aa39dbc30d"},
-    {file = "scipy-1.5.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:ae24f16056c87e7f086a56a7aaf6e65e4626ac70b7e08d7f54e078693abcf778"},
-    {file = "scipy-1.5.0-cp37-cp37m-manylinux1_i686.whl", hash = "sha256:1b23129e9838694c36475b296ac251ae0b0247455352f2bed0b246c30b61c822"},
-    {file = "scipy-1.5.0-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:69eb6245ff472db406c3e9b3e13bd0dc6e2ff48e7e758a7bfca296ecdb1ae8b9"},
-    {file = "scipy-1.5.0-cp37-cp37m-win32.whl", hash = "sha256:38cdb4eafe727b324f295ab69eaa0788a8eefe08d59360968928753ab7f68ba9"},
-    {file = "scipy-1.5.0-cp37-cp37m-win_amd64.whl", hash = "sha256:f662ad49ef930325161bd5edac39932c3f1b55547eaa0afce08367522f6314df"},
-    {file = "scipy-1.5.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:40969696eb13c2f1b6fc8e99ce597a47627f0167a7feb6086c2ccdfb55835cfc"},
-    {file = "scipy-1.5.0-cp38-cp38-manylinux1_i686.whl", hash = "sha256:0f62f3be924a4314cf2384c6f77d3a0e3bf4ada370530a7d0a6d5a61192bec9e"},
-    {file = "scipy-1.5.0-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:4e1a790fdf82a67619a38f017105df4bb66dfcdaea45df793ece27fd534720c2"},
-    {file = "scipy-1.5.0-cp38-cp38-win32.whl", hash = "sha256:2e99f50d0061c385f8f46c5a99bb07ad013ec2dcf95ccba3be4e081594e7ab19"},
-    {file = "scipy-1.5.0-cp38-cp38-win_amd64.whl", hash = "sha256:2aec0f81a29440e0c000222ac0447748a840d328b5698dd900ece4113bca5cde"},
-    {file = "scipy-1.5.0.tar.gz", hash = "sha256:4ff72877d19b295ee7f7727615ea8238f2d59159df0bdd98f91754be4a2767f0"},
+    {file = "scipy-1.5.1-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:058e84930407927f71963a4ad8c1dc96c4d2d075636a68578195648c81f78810"},
+    {file = "scipy-1.5.1-cp36-cp36m-manylinux1_i686.whl", hash = "sha256:7908c85854c5b5b6d3ce7fefafac1ca3e23ff9ac41edabc2d46ae5dc9fa070ac"},
+    {file = "scipy-1.5.1-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:8302d69fb1528ea7c7f2a1ea640d354c981b6eb8192d1c175349874209397604"},
+    {file = "scipy-1.5.1-cp36-cp36m-win32.whl", hash = "sha256:35d042d6499caf1a5d171baed0ebf01eb665b7af2ad98a8ff1b0e6e783654540"},
+    {file = "scipy-1.5.1-cp36-cp36m-win_amd64.whl", hash = "sha256:5e0bb43ff581811ab7f27425f6b96c1ddf7591ccad2e486c9af0b910c18f7185"},
+    {file = "scipy-1.5.1-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:b4858ccbd88f4b53950fb9fc0069c1d9fea83d7cff2382e1d8b023d3f4883014"},
+    {file = "scipy-1.5.1-cp37-cp37m-manylinux1_i686.whl", hash = "sha256:eb46d8b5947ca27b0bc972cecfba8130f088a83ab3d08c1a6033d9070b3046b3"},
+    {file = "scipy-1.5.1-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:fff15df01bef1243468be60c55178ed7576270b200aab08a7ffd5b8e0bbc340c"},
+    {file = "scipy-1.5.1-cp37-cp37m-win32.whl", hash = "sha256:81859ed3aad620752dd2c07c32b5d3a80a0d47c5e3813904621954a78a0ae899"},
+    {file = "scipy-1.5.1-cp37-cp37m-win_amd64.whl", hash = "sha256:c05c6fe76228cc13c5214e9faf5f2a871a1da54473bc417ab9da310d0e5fff8b"},
+    {file = "scipy-1.5.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:71742889393a724dfce755b6b61228677873d269a4234e51ddaf08b998433c91"},
+    {file = "scipy-1.5.1-cp38-cp38-manylinux1_i686.whl", hash = "sha256:9323d268775991b79690f7b9a28a4e8b8c4f2b160ed9f8a90123127314e2d3c1"},
+    {file = "scipy-1.5.1-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:06b19a650471781056c1a2172eeeeb777b8b516e9434005dd392a4559e0938b9"},
+    {file = "scipy-1.5.1-cp38-cp38-win32.whl", hash = "sha256:57a0f2be3063dbe1e3daf31ec9005576e8fd1022a28159d0db71d14566899d16"},
+    {file = "scipy-1.5.1-cp38-cp38-win_amd64.whl", hash = "sha256:c06e731aa46c0dfc563cc636155758178ebc019ef78b9b0f4370effe2ac0f0e6"},
+    {file = "scipy-1.5.1.tar.gz", hash = "sha256:039572f0ca9578a466683558c5bf1e65d442860ec6e13307d528749cfe6d07b8"},
 ]
 sentry-sdk = [
-    {file = "sentry-sdk-0.15.1.tar.gz", hash = "sha256:3ac0c430761b3cb7682ce612151d829f8644bb3830d4e530c75b02ceb745ff49"},
-    {file = "sentry_sdk-0.15.1-py2.py3-none-any.whl", hash = "sha256:06825c15a78934e78941ea25910db71314c891608a46492fc32c15902c6b2119"},
+    {file = "sentry-sdk-0.16.0.tar.gz", hash = "sha256:da06bc3641e81ec2c942f87a0676cd9180044fa3d1697524a0005345997542e2"},
+    {file = "sentry_sdk-0.16.0-py2.py3-none-any.whl", hash = "sha256:e80d61af85d99a1222c1a3e2a24023618374cd50a99673aa7fa3cf920e7d813b"},
 ]
 shortuuid = [
     {file = "shortuuid-1.0.1-py3-none-any.whl", hash = "sha256:492c7402ff91beb1342a5898bd61ea953985bf24a41cd9f247409aa2e03c8f77"},
