@@ -8,7 +8,6 @@ import torch.optim as optim
 from ignite.engine import Events
 from ignite.engine import create_supervised_evaluator, create_supervised_trainer
 from ignite.metrics import Accuracy, Loss
-from ignite.utils import setup_logger
 from torch.utils.data import DataLoader, RandomSampler
 from torchvision.utils import save_image  # noqa
 from tqdm.auto import tqdm
@@ -16,24 +15,6 @@ from tqdm.auto import tqdm
 from nemo.datasets import prepare_datasets
 from nemo.models import initialize_classifier
 from nemo.utils import ensure_reproducibility
-
-
-def predict_one_batch(batch, model, criterion, optimizer=None):
-    image, label = batch
-
-    output = model(image)
-    loss = criterion(output, label)
-
-    if optimizer:
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-    return output, loss
-
-
-def copy_to_device(tensor, device):
-    return [t.to(device=device, non_blocking=True) for t in tensor]
 
 
 def main(args):
@@ -54,18 +35,14 @@ def main(args):
     model = model.to(device=device)
 
     optimizer = optim.Adam(model.parameters())
-    # criterion = nn.CrossEntropyLoss()
     criterion = nn.NLLLoss()
 
     max_epochs = 1 if args.dev else args.max_epochs
     epoch_length = 1 if args.dev else None
 
+    metrics = {"accuracy": Accuracy(), "nll": Loss(criterion)}
     trainer = create_supervised_trainer(model, optimizer, criterion, device=device, non_blocking=True)
-    # trainer.logger = setup_logger("trainer")
-
-    val_metrics = {"accuracy": Accuracy(), "nll": Loss(criterion)}
-    evaluator = create_supervised_evaluator(model, metrics=val_metrics, device=device, non_blocking=True)
-    # evaluator.logger = setup_logger("evaluator")
+    evaluator = create_supervised_evaluator(model, metrics=metrics, device=device, non_blocking=True)
 
     desc = "ITERATION - loss: {:.2f}"
     pbar = tqdm(initial=0, leave=False, total=len(train_dataloader), desc=desc.format(0))
@@ -101,6 +78,8 @@ def main(args):
         tqdm.write(f"{event_name} took {event_duration} seconds")
 
     trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+    evaluator.run(test_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+
     pbar.close()
 
 
