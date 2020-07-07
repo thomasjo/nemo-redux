@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# Agglutinated
+python src/nemo/preprocessing/extract_patches.py \
+  --source-dir data/raw/agglutinated \
+  --output-dir output/patches/agglutinated \
+  --border-blur 0 \
+  --corner-margin 400 \
+  --object-threshold 90 \
+  --debug
+
+# Benthic
+python src/nemo/preprocessing/extract_patches.py \
+  --source-dir data/raw/benthic \
+  --output-dir output/patches/benthic \
+  --border-blur 0 \
+  --corner-margin 400 \
+  --object-threshold 90 \
+  --debug
+
+# Planktic
+python src/nemo/preprocessing/extract_patches.py \
+  --source-dir data/raw/planktic \
+  --output-dir output/patches/planktic \
+  --border-blur 0 \
+  --corner-margin 400 \
+  --object-threshold 90 \
+  --debug
+
+# Sediment
+python src/nemo/preprocessing/extract_patches.py \
+  --source-dir data/raw/sediment \
+  --output-dir output/patches/sediment \
+  --border-blur 0 \
+  --corner-margin 400 \
+  --object-blur 35 \
+  --object-threshold 70 \
+  --debug
