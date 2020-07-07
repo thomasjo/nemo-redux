@@ -16,11 +16,7 @@ from nemo.models import initialize_classifier
 from nemo.utils import ensure_reproducibility
 
 
-def main(args):
-    ensure_reproducibility(seed=42)
-
-    device = torch.device(args.device)
-
+def get_dataflow(args):
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
     train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
     num_classes = len(train_dataset.classes)
@@ -32,27 +28,42 @@ def main(args):
     val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=args.num_workers, pin_memory=True)
     test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
+    return train_dataloader, val_dataloader, test_dataloader, num_classes
+
+
+def initialize(num_classes, device):
     model = initialize_classifier(num_classes)
     model = model.to(device=device)
 
     optimizer = optim.Adam(model.parameters())
     criterion = nn.NLLLoss()
 
+    return model, optimizer, criterion
+
+
+def main(args):
+    ensure_reproducibility(seed=42)
+
+    device = torch.device(args.device)
     max_epochs = 1 if args.dev else args.max_epochs
     epoch_length = 1 if args.dev else None
 
-    metrics = {"accuracy": Accuracy(), "nll": Loss(criterion)}
+    train_dataloader, val_dataloader, test_dataloader, num_classes = get_dataflow(args)
+    model, optimizer, criterion = initialize(num_classes, device)
+    metrics = {"accuracy": Accuracy(), "loss": Loss(criterion)}
+
     trainer = create_supervised_trainer(model, optimizer, criterion, device=device, non_blocking=True)
     evaluator = create_supervised_evaluator(model, metrics=metrics, device=device, non_blocking=True)
 
-    setup_common_training_handlers(trainer, log_every_iters=1)
-    add_early_stopping_by_val_score(3, evaluator, trainer, metric_name="nll")
-    save_best_model_by_val_score(args.output_dir, evaluator, model, metric_name="nll", trainer=trainer)
-    setup_wandb_logging(trainer, optimizer, evaluator, log_every_iters=32)
-
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_validation_results(engine):
+        evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
         evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+
+    setup_common_training_handlers(trainer, log_every_iters=1)
+    add_early_stopping_by_val_score(3, evaluator, trainer, metric_name="loss")
+    save_best_model_by_val_score(args.output_dir, evaluator, model, metric_name="loss", trainer=trainer)
+    setup_wandb_logging(trainer, optimizer, evaluator, log_every_iters=1)
 
     trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
     evaluator.run(test_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
