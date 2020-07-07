@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
 
+from pytorch_lightning import LightningModule
 from torchvision.models import vgg16, vgg16_bn  # noqa
 
 
-class Classifier(nn.Module):
+class Classifier(LightningModule):
     def __init__(self, feature_extractor, num_features, num_classes):
         super().__init__()
 
@@ -20,6 +22,8 @@ class Classifier(nn.Module):
             nn.Linear(32, num_classes),
         )
 
+        self.criterion = nn.NLLLoss()
+
     def forward(self, x):
         x = self.feature_extractor(x)
         x = self.pool(x)
@@ -28,6 +32,99 @@ class Classifier(nn.Module):
         x = torch.log_softmax(x, dim=1)
 
         return x
+
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters())
+        return optimizer
+
+    def training_step(self, batch, batch_idx):
+        image, target = batch
+
+        prediction = self(image)
+        loss = self.criterion(prediction, target)
+
+        num_correct = torch.sum(prediction.argmax(dim=1) == target)
+        num_examples = torch.tensor(target.shape[0])
+        accuracy = torch.true_divide(num_correct, num_examples)
+
+        log = {"train/loss": loss}
+        progress_bar = {"train_acc": accuracy}
+
+        return {
+            "loss": loss,
+            "log": log,
+            "progress_bar": progress_bar,
+        }
+
+    def validation_step(self, batch, batch_idx):
+        image, target = batch
+
+        prediction = self(image)
+        loss = self.criterion(prediction, target)
+
+        num_correct = torch.sum(prediction.argmax(dim=1) == target)
+        num_examples = torch.tensor(target.shape[0])
+        accuracy = torch.true_divide(num_correct, num_examples)
+
+        log = {
+            "val/loss": loss,
+            "val/acc": accuracy,
+        }
+
+        return {
+            "val_loss": loss,
+            "val_acc": accuracy,
+            "log": log,
+        }
+
+    def validation_epoch_end(self, outputs):
+        mean_loss = torch.stack([out["val_loss"] for out in outputs]).mean()
+        mean_accuracy = torch.stack([out["val_acc"] for out in outputs]).mean()
+
+        log = {
+            "val/loss": mean_loss,
+            "val/acc": mean_accuracy,
+        }
+
+        return {
+            "val_loss": mean_loss,
+            "val_acc": mean_accuracy,
+            "log": log,
+        }
+
+    def test_step(self, batch, batch_idx):
+        image, target = batch
+
+        prediction = self(image)
+        loss = self.criterion(prediction, target)
+
+        num_correct = torch.sum(prediction.argmax(dim=1) == target)
+        num_examples = torch.tensor(target.shape[0])
+        accuracy = torch.true_divide(num_correct, num_examples)
+
+        log = {
+            "test/loss": loss,
+            "test/acc": accuracy,
+        }
+
+        return {
+            "test_loss": loss,
+            "test_acc": accuracy,
+            "log": log,
+        }
+
+    def test_epoch_end(self, outputs):
+        mean_loss = torch.stack([out["test_loss"] for out in outputs]).mean()
+        mean_accuracy = torch.stack([out["test_acc"] for out in outputs]).mean()
+
+        log = {
+            "test/loss": mean_loss,
+            "test/acc": mean_accuracy,
+        }
+
+        return {
+            "log": log,
+        }
 
 
 def initialize_feature_extractor():

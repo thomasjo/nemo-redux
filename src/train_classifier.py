@@ -1,13 +1,9 @@
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-
-from ignite.contrib.engines.common import add_early_stopping_by_val_score, save_best_model_by_val_score, setup_common_training_handlers, setup_wandb_logging
-from ignite.engine import Events, create_supervised_evaluator, create_supervised_trainer
-from ignite.metrics import Accuracy, Loss
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader, RandomSampler
 from torchvision.utils import save_image  # noqa
 
@@ -16,10 +12,28 @@ from nemo.models import initialize_classifier
 from nemo.utils import ensure_reproducibility
 
 
+def create_trainer(args):
+    early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=3)
+    model_checkpoint = ModelCheckpoint(str(args.output_dir), monitor="val_loss", mode="min", save_top_k=3)
+    logger = WandbLogger(save_dir=str(args.output_dir)) if not args.dev else None
+
+    trainer = Trainer(
+        gpus=args.num_gpus,
+        fast_dev_run=args.dev,
+        early_stop_callback=early_stopping,
+        checkpoint_callback=model_checkpoint,
+        # Logging configuration
+        logger=logger,
+        log_save_interval=1,
+        row_log_interval=1,
+        progress_bar_refresh_rate=1,
+    )
+
+    return trainer
+
+
 def main(args):
     ensure_reproducibility(seed=42)
-
-    device = torch.device(args.device)
 
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
     train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
@@ -33,29 +47,9 @@ def main(args):
     test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
     model = initialize_classifier(num_classes)
-    model = model.to(device=device)
-
-    optimizer = optim.Adam(model.parameters())
-    criterion = nn.NLLLoss()
-
-    max_epochs = 1 if args.dev else args.max_epochs
-    epoch_length = 1 if args.dev else None
-
-    metrics = {"accuracy": Accuracy(), "nll": Loss(criterion)}
-    trainer = create_supervised_trainer(model, optimizer, criterion, device=device, non_blocking=True)
-    evaluator = create_supervised_evaluator(model, metrics=metrics, device=device, non_blocking=True)
-
-    setup_common_training_handlers(trainer, log_every_iters=1)
-    add_early_stopping_by_val_score(3, evaluator, trainer, metric_name="nll")
-    save_best_model_by_val_score(args.output_dir, evaluator, model, metric_name="nll", trainer=trainer)
-    setup_wandb_logging(trainer, optimizer, evaluator, log_every_iters=32)
-
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def log_validation_results(engine):
-        evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
-
-    trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
-    evaluator.run(test_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+    trainer = create_trainer(args)
+    trainer.fit(model, train_dataloader, val_dataloader)
+    trainer.test(model, test_dataloader)
 
 
 def parse_args():
@@ -65,7 +59,7 @@ def parse_args():
     parser.add_argument("--max-epochs", type=int, default=25, help="maximum number of epochs to train")
 
     parser.add_argument("--dev", action="store_true", help="run each training phase with only one batch")
-    parser.add_argument("--device", type=str, default="cuda", help="device to use for model training")
+    parser.add_argument("--num-gpus", type=int, default=1, help="number of GPUs to use for model training")
     parser.add_argument("--num-workers", type=int, default=2, help="number of workers to use for data loaders")
 
     return parser.parse_args()
