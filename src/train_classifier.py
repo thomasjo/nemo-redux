@@ -5,12 +5,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from ignite.engine import Events
-from ignite.engine import create_supervised_evaluator, create_supervised_trainer
+from ignite.contrib.engines.common import add_early_stopping_by_val_score, save_best_model_by_val_score, setup_common_training_handlers, setup_wandb_logging
+from ignite.engine import Events, create_supervised_evaluator, create_supervised_trainer
 from ignite.metrics import Accuracy, Loss
 from torch.utils.data import DataLoader, RandomSampler
 from torchvision.utils import save_image  # noqa
-from tqdm.auto import tqdm
 
 from nemo.datasets import prepare_datasets
 from nemo.models import initialize_classifier
@@ -26,7 +25,9 @@ def main(args):
     train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
     num_classes = len(train_dataset.classes)
 
-    train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=4 * len(train_dataset))
+    num_training_samples = 4 * len(train_dataset)  # Oversample to get more random augmentations
+    train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
+
     train_dataloader = DataLoader(train_dataset, batch_size=32, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
     val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=args.num_workers, pin_memory=True)
     test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=args.num_workers, pin_memory=True)
@@ -44,48 +45,23 @@ def main(args):
     trainer = create_supervised_trainer(model, optimizer, criterion, device=device, non_blocking=True)
     evaluator = create_supervised_evaluator(model, metrics=metrics, device=device, non_blocking=True)
 
-    desc = "ITERATION - loss: {:.2f}"
-    pbar = tqdm(initial=0, leave=False, total=len(train_dataloader), desc=desc.format(0))
-
-    @trainer.on(Events.ITERATION_COMPLETED(every=10))
-    def log_training_loss(engine):
-        pbar.desc = desc.format(engine.state.output)
-        pbar.update(10)
-
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def log_training_results(engine):
-        pbar.refresh()
-        evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
-        metrics = evaluator.state.metrics
-        acc = metrics["accuracy"]
-        nll = metrics["nll"]
-        tqdm.write(f"Training Results - Epoch: {engine.state.epoch} Accuracy: {acc:.2f} Loss: {nll:.2f}")
+    setup_common_training_handlers(trainer, log_every_iters=1)
+    add_early_stopping_by_val_score(3, evaluator, trainer, metric_name="nll")
+    save_best_model_by_val_score(args.output_dir, evaluator, model, metric_name="nll", trainer=trainer)
+    setup_wandb_logging(trainer, optimizer, evaluator, log_every_iters=32)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_validation_results(engine):
-        pbar.refresh()
         evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
-        metrics = evaluator.state.metrics
-        acc = metrics["accuracy"]
-        nll = metrics["nll"]
-        tqdm.write(f"Validation Results - Epoch: {engine.state.epoch} Accuracy: {acc:.2f} Loss: {nll:.2f}")
-        pbar.n = pbar.last_print_n = 0
-
-    @trainer.on(Events.EPOCH_COMPLETED | Events.COMPLETED)
-    def log_time(engine):
-        event_name = trainer.last_event_name.name
-        event_duration = trainer.state.times[event_name]
-        tqdm.write(f"{event_name} took {event_duration} seconds")
 
     trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
     evaluator.run(test_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
-
-    pbar.close()
 
 
 def parse_args():
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--data-dir", type=Path, required=True, help="path to partitioned data directory")
+    parser.add_argument("--output-dir", type=Path, required=True, help="path to output directory")
     parser.add_argument("--max-epochs", type=int, default=25, help="maximum number of epochs to train")
 
     parser.add_argument("--dev", action="store_true", help="run each training phase with only one batch")
