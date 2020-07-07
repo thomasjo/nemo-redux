@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from torchvision.models import vgg16, vgg16_bn
+from torchvision.models import vgg16, vgg16_bn  # noqa
 
 
 class Classifier(nn.Module):
@@ -32,7 +32,7 @@ class Classifier(nn.Module):
 
 def initialize_feature_extractor():
     full_model = vgg16_bn(pretrained=True)
-    full_model = vgg16(pretrained=True)
+    # full_model = vgg16(pretrained=True)
     feature_extractor = full_model.features
     num_features = full_model.classifier[0].in_features
 
