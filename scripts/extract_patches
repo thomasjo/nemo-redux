@@ -4,8 +4,8 @@ set -eu
 
 # Agglutinated
 python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/agglutinated \
-  --output-dir output/patches/agglutinated \
+  --source-dir data/raw/2019-06/agglutinated \
+  --output-dir output/patches/2019-06/agglutinated \
   --border-blur 0 \
   --corner-margin 400 \
   --object-threshold 90 \
@@ -13,8 +13,8 @@ python src/nemo/preprocessing/extract_patches.py \
 
 # Benthic
 python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/benthic \
-  --output-dir output/patches/benthic \
+  --source-dir data/raw/2019-06/benthic \
+  --output-dir output/patches/2019-06/benthic \
   --border-blur 0 \
   --corner-margin 400 \
   --object-threshold 90 \
@@ -22,8 +22,8 @@ python src/nemo/preprocessing/extract_patches.py \
 
 # Planktic
 python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/planktic \
-  --output-dir output/patches/planktic \
+  --source-dir data/raw/2019-06/planktic \
+  --output-dir output/patches/2019-06/planktic \
   --border-blur 0 \
   --corner-margin 400 \
   --object-threshold 90 \
@@ -31,8 +31,8 @@ python src/nemo/preprocessing/extract_patches.py \
 
 # Sediment
 python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/sediment \
-  --output-dir output/patches/sediment \
+  --source-dir data/raw/2019-06/sediment \
+  --output-dir output/patches/2019-06/sediment \
   --border-blur 0 \
   --corner-margin 400 \
   --object-blur 35 \
