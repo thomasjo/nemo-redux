@@ -84,6 +84,7 @@ def extract_patches(
     source_dir: Path,
     output_dir: Path,
     *,
+    patch_size: int,
     border_blur: int,
     border_threshold: int,
     object_blur: int,
@@ -96,13 +97,13 @@ def extract_patches(
     shutil.rmtree(output_dir, ignore_errors=True)
     output_dir.mkdir(parents=True)
 
+    patch_width, patch_height = patch_size, patch_size
+
+    print("=" * 72)
     print("Source directory:", source_dir)
+    print("Output directory:", output_dir)
+    print("Patch dimensions:", [patch_width, patch_height])
     print("-" * 72)
-
-    # TODO(thomasjo): Make patch size configurable or dynamic?
-    patch_dims = np.array([224, 224])
-    patch_height, patch_width = patch_dims
-
     for image_file in sorted(source_dir.rglob("*.tiff")):
         print(image_file)
 
@@ -200,27 +201,31 @@ def extract_patches(
             patch_postfix = f"patch-{patch_num:03d}"
             save_image(output_file, image[row_crop, col_crop], postfix=patch_postfix)
 
-            # Save patches for other source image frames for e.g. alternative exposure settings, etc.
-            for idx, aux_image in enumerate(aux_images, start=1):
-                aux_postfix = f"{patch_postfix}--aux-{idx}"
-                save_image(output_file, aux_image[row_crop, col_crop], postfix=aux_postfix)
+            if aux_images is not None:
+                # Save patches for other source image frames for e.g. alternative exposure settings, etc.
+                for idx, aux_image in enumerate(aux_images, start=1):
+                    aux_postfix = f"{patch_postfix}--aux-{idx}"
+                    save_image(output_file, aux_image[row_crop, col_crop], postfix=aux_postfix)
 
         if debug_mode:
             # Save bounding box image.
             save_image(output_file, image_bbox, postfix="bbox")
 
+    print()
+
 
 def parse_args():
-    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+    parser = ArgumentParser(formatter_class=lambda prog: ArgumentDefaultsHelpFormatter(prog, max_help_position=100))
 
-    parser.add_argument("--source-dir", type=Path, metavar="", required=True, help="path to source image directory")
-    parser.add_argument("--output-dir", type=Path, metavar="", required=True, help="path to output directory")
-    parser.add_argument("--border-blur", type=int, metavar="", default=75, help="size of the blur used for border detection")
-    parser.add_argument("--border-threshold", type=int, metavar="", default=70, help="threshold used for border detection")
-    parser.add_argument("--object-blur", type=int, metavar="", default=25, help="size of the blur used for object detection")
-    parser.add_argument("--object-threshold", type=int, metavar="", default=120, help="threshold used for object detection")
-    parser.add_argument("--corner-margin", type=int, metavar="", default=0, help="margin outside the detection region")
-    parser.add_argument("--edge-margin", type=int, metavar="", default=122, help="margin outside the detection region")
+    parser.add_argument("--source-dir", type=Path, metavar="PATH", required=True, help="path to source image directory")
+    parser.add_argument("--output-dir", type=Path, metavar="PATH", required=True, help="path to output directory")
+    parser.add_argument("--patch-size", type=int, metavar="INT", default=256, help="width and height of the extracted patches")
+    parser.add_argument("--border-blur", type=int, metavar="INT", default=75, help="size of the blur used for border detection")
+    parser.add_argument("--border-threshold", type=int, metavar="INT", default=70, help="threshold used for border detection")
+    parser.add_argument("--object-blur", type=int, metavar="INT", default=25, help="size of the blur used for object detection")
+    parser.add_argument("--object-threshold", type=int, metavar="INT", default=120, help="threshold used for object detection")
+    parser.add_argument("--corner-margin", type=int, metavar="INT", default=0, help="margin outside the detection region")
+    parser.add_argument("--edge-margin", type=int, metavar="INT", default=122, help="margin outside the detection region")
     parser.add_argument("--debug", action="store_true", help="margin outside the detection region")
 
     return parser.parse_args()
@@ -232,6 +237,7 @@ if __name__ == "__main__":
     extract_patches(
         args.source_dir,
         args.output_dir,
+        patch_size=args.patch_size,
         border_blur=args.border_blur,
         border_threshold=args.border_threshold,
         object_blur=args.object_blur,
