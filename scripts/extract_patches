@@ -23,9 +23,9 @@ allowlist=(
   "2020-07"
 )
 
+# 2019-06
+# -------
 if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
-  # 2019-06
-  # -------
   # dims: [3772, 3602]
   # mean: 3687
 
@@ -33,44 +33,39 @@ if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
   python src/nemo/preprocessing/extract_patches.py \
     --source-dir data/raw/2019-06/agglutinated \
     --output-dir output/patches/2019-06/agglutinated \
-    --border-blur 0 \
     --corner-margin 400 \
-    --object-threshold 90 \
+    --object-blur 31 \
     --debug
 
   # Benthic
   python src/nemo/preprocessing/extract_patches.py \
     --source-dir data/raw/2019-06/benthic \
     --output-dir output/patches/2019-06/benthic \
-    --border-blur 0 \
     --corner-margin 400 \
-    --object-threshold 90 \
+    --object-blur 31 \
     --debug
 
   # Planktic
   python src/nemo/preprocessing/extract_patches.py \
     --source-dir data/raw/2019-06/planktic \
     --output-dir output/patches/2019-06/planktic \
-    --border-blur 0 \
     --corner-margin 400 \
-    --object-threshold 90 \
+    --object-blur 31 \
     --debug
 
   # Sediment
   python src/nemo/preprocessing/extract_patches.py \
     --source-dir data/raw/2019-06/sediment \
     --output-dir output/patches/2019-06/sediment \
-    --border-blur 0 \
     --corner-margin 400 \
-    --object-blur 35 \
-    --object-threshold 70 \
+    --object-blur 31 \
     --debug
 fi
 
 
+# 2020-05
+# -------
 if contains allowlist "2020-05"; then
-  # 2020-05
-  # -------
   # dims: [3694, 3596]
   # mean: 3645
 
@@ -93,9 +88,9 @@ if contains allowlist "2020-05"; then
     --debug
 fi
 
+# 2020-07
+# -------
 if contains allowlist "2020-07"; then
-  # 2020-07
-  # -------
   # dims: [8745, 9151]
   # mean: 8948
   #
@@ -111,6 +106,7 @@ if contains allowlist "2020-07"; then
     --patch-size 622 \
     --border-blur 0 \
     --corner-margin 972 \
+    --edge-margin 296 \
     --object-threshold 90 \
     --debug
 
@@ -121,6 +117,7 @@ if contains allowlist "2020-07"; then
     --patch-size 622 \
     --border-blur 0 \
     --corner-margin 972 \
+    --edge-margin 296 \
     --object-threshold 90 \
     --debug
 
@@ -131,6 +128,7 @@ if contains allowlist "2020-07"; then
     --patch-size 622 \
     --border-blur 0 \
     --corner-margin 972 \
+    --edge-margin 296 \
     --object-threshold 90 \
     --debug
 
@@ -141,6 +139,7 @@ if contains allowlist "2020-07"; then
     --patch-size 622 \
     --border-blur 0 \
     --corner-margin 972 \
+    --edge-margin 296 \
     --object-blur 35 \
     --object-threshold 70 \
     --debug
