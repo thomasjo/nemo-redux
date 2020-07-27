@@ -10,8 +10,9 @@ class Classifier(LightningModule):
     def __init__(self, feature_extractor, num_features, num_classes):
         super().__init__()
 
-        self.pool = nn.AdaptiveAvgPool2d((7, 7))
         self.feature_extractor = feature_extractor
+        self.pool = nn.AdaptiveAvgPool2d((7, 7))
+
         self.classifier = nn.Sequential(
             nn.Linear(num_features, 512),
             nn.ReLU(inplace=True),
@@ -33,30 +34,18 @@ class Classifier(LightningModule):
 
         return x
 
+    def train(self, mode=True):
+        super().train(mode)
+        self.feature_extractor.eval()
+
+        return self
+
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters())
+        optimizer = optim.Adam(self.parameters(), lr=1e-5)
+
         return optimizer
 
-    def training_step(self, batch, batch_idx):
-        image, target = batch
-
-        prediction = self(image)
-        loss = self.criterion(prediction, target)
-
-        num_correct = torch.sum(prediction.argmax(dim=1) == target)
-        num_examples = torch.tensor(target.shape[0])
-        accuracy = torch.true_divide(num_correct, num_examples)
-
-        log = {"train/loss": loss}
-        progress_bar = {"train_acc": accuracy}
-
-        return {
-            "loss": loss,
-            "log": log,
-            "progress_bar": progress_bar,
-        }
-
-    def validation_step(self, batch, batch_idx):
+    def predict_on_batch(self, batch, batch_idx, prefix=None):
         image, target = batch
 
         prediction = self(image)
@@ -67,9 +56,25 @@ class Classifier(LightningModule):
         accuracy = torch.true_divide(num_correct, num_examples)
 
         log = {
-            "val/loss": loss,
-            "val/acc": accuracy,
+            f"{prefix}/loss": loss,
+            f"{prefix}/acc": accuracy,
         }
+
+        return loss, accuracy, log
+
+    def training_step(self, batch, batch_idx):
+        loss, accuracy, log = self.predict_on_batch(batch, batch_idx, prefix="train")
+
+        progress_bar = {"train_acc": accuracy}
+
+        return {
+            "loss": loss,
+            "log": log,
+            "progress_bar": progress_bar,
+        }
+
+    def validation_step(self, batch, batch_idx):
+        loss, accuracy, log = self.predict_on_batch(batch, batch_idx, prefix="val")
 
         return {
             "val_loss": loss,
@@ -93,19 +98,7 @@ class Classifier(LightningModule):
         }
 
     def test_step(self, batch, batch_idx):
-        image, target = batch
-
-        prediction = self(image)
-        loss = self.criterion(prediction, target)
-
-        num_correct = torch.sum(prediction.argmax(dim=1) == target)
-        num_examples = torch.tensor(target.shape[0])
-        accuracy = torch.true_divide(num_correct, num_examples)
-
-        log = {
-            "test/loss": loss,
-            "test/acc": accuracy,
-        }
+        loss, accuracy, log = self.predict_on_batch(batch, batch_idx, prefix="test")
 
         return {
             "test_loss": loss,
@@ -128,11 +121,12 @@ class Classifier(LightningModule):
 
 
 def initialize_feature_extractor():
-    full_model = vgg16_bn(pretrained=True)
-    # full_model = vgg16(pretrained=True)
+    # full_model = vgg16_bn(pretrained=True)
+    full_model = vgg16(pretrained=True)
     feature_extractor = full_model.features
     num_features = full_model.classifier[0].in_features
 
+    feature_extractor.eval()
     for param in feature_extractor.parameters():
         param.requires_grad = False
 
