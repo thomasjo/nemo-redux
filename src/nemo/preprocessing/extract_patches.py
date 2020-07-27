@@ -219,13 +219,18 @@ def parse_args():
 
     parser.add_argument("--source-dir", type=Path, metavar="PATH", required=True, help="path to source image directory")
     parser.add_argument("--output-dir", type=Path, metavar="PATH", required=True, help="path to output directory")
+
     parser.add_argument("--patch-size", type=int, metavar="INT", default=256, help="width and height of the extracted patches")
+
     parser.add_argument("--border-blur", type=int, metavar="INT", default=75, help="size of the blur used for border detection")
     parser.add_argument("--border-threshold", type=int, metavar="INT", default=70, help="threshold used for border detection")
+
     parser.add_argument("--object-blur", type=int, metavar="INT", default=25, help="size of the blur used for object detection")
     parser.add_argument("--object-threshold", type=int, metavar="INT", default=120, help="threshold used for object detection")
+
     parser.add_argument("--corner-margin", type=int, metavar="INT", default=0, help="margin outside the detection region")
     parser.add_argument("--edge-margin", type=int, metavar="INT", default=122, help="margin outside the detection region")
+
     parser.add_argument("--debug", action="store_true", help="margin outside the detection region")
 
     return parser.parse_args()
