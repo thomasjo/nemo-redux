@@ -34,7 +34,7 @@ def preprocess_image(image, scale=None, max_size=None):
 
 def load_image(path, *, scale=0.41, max_size=None):
     _, frames = cv.imreadmulti(str(path), flags=cv.IMREAD_COLOR)  # TODO(thomasjo): Use cv.IMREAD_UNCHANGED instead?
-    frames = [preprocess_image(frame, scale, max_size) for frame in frames]
+    # frames = [preprocess_image(frame, scale, max_size) for frame in frames]
 
     main_image = frames[0]
     aux_images = frames[1:] if len(frames) > 1 else None
