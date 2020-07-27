@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nemo-redux-classifier2
+spec:
+  template:
+    spec:
+      containers:
+      - name: nemo-redux-classifier
+        image: thomasjo/nemo-redux
+        workingDir: /storage/nemo-redux
+        command:
+        - python
+        - src/train_classifier.py
+        - --data-dir=data/partitions/2019-06
+        - --output-dir=output
+        stdin: true
+        tty: true
+        envFrom:
+        - secretRef:
+            name: wandb
+        volumeMounts:
+        - name: storage
+          mountPath: /storage
+        - name: shm
+          mountPath: /dev/shm
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+            claimName: storage
+      - name: shm
+        emptyDir:
+          medium: Memory
+      restartPolicy: OnFailure
+  backoffLimit: 0
