@@ -118,10 +118,10 @@ def extract_patches(
         if border_blur and border_threshold:
             # Binary mask for finding the "metal border".
             # TODO: Make blur size configurable?
-            image_binary = compute_binary_mask(image, blur_size=border_blur, threshold=border_threshold)
+            border_binary = compute_binary_mask(image, blur_size=border_blur, threshold=border_threshold)
 
             # Find the "metal border" component based on area.
-            _, image_cc, stats, _ = cv.connectedComponentsWithStats(image_binary)
+            _, image_cc, stats, _ = cv.connectedComponentsWithStats(border_binary)
             # Assume that the metal border is the component with the largest area,
             # after ignoring the "background" that is always labeled as 0.
             border_label = np.argmax(stats[1:, cv.CC_STAT_AREA]) + 1 if stats.shape[0] > 1 else -1
