@@ -2,39 +2,146 @@
 
 set -eu
 
-# Agglutinated
-python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/2019-06/agglutinated \
-  --output-dir output/patches/2019-06/agglutinated \
-  --border-blur 0 \
-  --corner-margin 400 \
-  --object-threshold 90 \
-  --debug
+function contains() {
+  local array="$1[@]"
+  local seeking="$2"
+  local not_found=1
 
-# Benthic
-python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/2019-06/benthic \
-  --output-dir output/patches/2019-06/benthic \
-  --border-blur 0 \
-  --corner-margin 400 \
-  --object-threshold 90 \
-  --debug
+  for elem in "${!array}"; do
+    if [[ $elem == "$seeking" ]]; then
+      not_found=0
+      break
+    fi
+  done
 
-# Planktic
-python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/2019-06/planktic \
-  --output-dir output/patches/2019-06/planktic \
-  --border-blur 0 \
-  --corner-margin 400 \
-  --object-threshold 90 \
-  --debug
+  return $not_found
+}
 
-# Sediment
-python src/nemo/preprocessing/extract_patches.py \
-  --source-dir data/raw/2019-06/sediment \
-  --output-dir output/patches/2019-06/sediment \
-  --border-blur 0 \
-  --corner-margin 400 \
-  --object-blur 35 \
-  --object-threshold 70 \
-  --debug
+allowlist=(
+  "2019-06"
+  "2020-05"
+  "2020-07"
+)
+
+if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
+  # 2019-06
+  # -------
+  # dims: [3772, 3602]
+  # mean: 3687
+
+  # Agglutinated
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2019-06/agglutinated \
+    --output-dir output/patches/2019-06/agglutinated \
+    --border-blur 0 \
+    --corner-margin 400 \
+    --object-threshold 90 \
+    --debug
+
+  # Benthic
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2019-06/benthic \
+    --output-dir output/patches/2019-06/benthic \
+    --border-blur 0 \
+    --corner-margin 400 \
+    --object-threshold 90 \
+    --debug
+
+  # Planktic
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2019-06/planktic \
+    --output-dir output/patches/2019-06/planktic \
+    --border-blur 0 \
+    --corner-margin 400 \
+    --object-threshold 90 \
+    --debug
+
+  # Sediment
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2019-06/sediment \
+    --output-dir output/patches/2019-06/sediment \
+    --border-blur 0 \
+    --corner-margin 400 \
+    --object-blur 35 \
+    --object-threshold 70 \
+    --debug
+fi
+
+
+if contains allowlist "2020-05"; then
+  # 2020-05
+  # -------
+  # dims: [3694, 3596]
+  # mean: 3645
+
+  # Benthic
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2020-05/benthic \
+    --output-dir output/patches/2020-05/benthic \
+    --border-blur 0 \
+    --corner-margin 400 \
+    --object-threshold 90 \
+    --debug
+
+  # Planktic
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2020-05/planktic \
+    --output-dir output/patches/2020-05/planktic \
+    --border-blur 0 \
+    --corner-margin 400 \
+    --object-threshold 90 \
+    --debug
+fi
+
+if contains allowlist "2020-07"; then
+  # 2020-07
+  # -------
+  # dims: [8745, 9151]
+  # mean: 8948
+  #
+  # scale: (8948 / 3687) ≃ 2.43
+  #
+  # patch size: 224 * scale ≃ 544
+  # patch size: 256 * scale ≃ 622
+
+  # Agglutinated
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2020-07/agglutinated \
+    --output-dir output/patches/2020-07/agglutinated \
+    --patch-size 622 \
+    --border-blur 0 \
+    --corner-margin 972 \
+    --object-threshold 90 \
+    --debug
+
+  # Benthic
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2020-07/benthic \
+    --output-dir output/patches/2020-07/benthic \
+    --patch-size 622 \
+    --border-blur 0 \
+    --corner-margin 972 \
+    --object-threshold 90 \
+    --debug
+
+  # Planktic
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2020-07/planktic \
+    --output-dir output/patches/2020-07/planktic \
+    --patch-size 622 \
+    --border-blur 0 \
+    --corner-margin 972 \
+    --object-threshold 90 \
+    --debug
+
+  # Sediment
+  python src/nemo/preprocessing/extract_patches.py \
+    --source-dir data/raw/2020-07/sediment \
+    --output-dir output/patches/2020-07/sediment \
+    --patch-size 622 \
+    --border-blur 0 \
+    --corner-margin 972 \
+    --object-blur 35 \
+    --object-threshold 70 \
+    --debug
+fi
