@@ -110,6 +110,17 @@ def extract_patches(
         output_file = output_dir / f"{image_file.stem}.png"
         image, aux_images = load_image(image_file)
 
+        # Store the "raw" image before contrast scaling, etc.
+        raw_image = image.copy()
+
+        # Attempt to increase contrast.
+        # TODO(thomasjo): Make this configurable via args?
+        image = cv.convertScaleAbs(image, alpha=1.4, beta=0)
+
+        if debug_mode:
+            save_image(output_file, raw_image, postfix="raw")
+            save_image(output_file, image, postfix="scaled")
+
         # Binary mask used for finding objects.
         # TODO: Make blur size configurable?
         image_binary = compute_binary_mask(image, blur_size=object_blur, threshold=object_threshold)
@@ -199,7 +210,7 @@ def extract_patches(
 
             # Save patch for the main source image frame.
             patch_postfix = f"patch-{patch_num:03d}"
-            save_image(output_file, image[row_crop, col_crop], postfix=patch_postfix)
+            save_image(output_file, raw_image[row_crop, col_crop], postfix=patch_postfix)
 
             if aux_images is not None:
                 # Save patches for other source image frames for e.g. alternative exposure settings, etc.
