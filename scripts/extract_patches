@@ -74,7 +74,7 @@ if contains allowlist "2020-05"; then
     --source-dir data/raw/2020-05/benthic \
     --output-dir output/patches/2020-05/benthic \
     --border-blur 0 \
-    --corner-margin 400 \
+    --corner-margin 500 \
     --object-threshold 90 \
     --debug
 
@@ -83,7 +83,7 @@ if contains allowlist "2020-05"; then
     --source-dir data/raw/2020-05/planktic \
     --output-dir output/patches/2020-05/planktic \
     --border-blur 0 \
-    --corner-margin 400 \
+    --corner-margin 500 \
     --object-threshold 90 \
     --debug
 fi
@@ -105,9 +105,10 @@ if contains allowlist "2020-07"; then
     --output-dir output/patches/2020-07/agglutinated \
     --patch-size 622 \
     --border-blur 0 \
-    --corner-margin 972 \
+    --corner-margin 1000 \
     --edge-margin 296 \
-    --object-threshold 90 \
+    --object-blur 75 \
+    --object-threshold 80 \
     --debug
 
   # Benthic
@@ -116,9 +117,10 @@ if contains allowlist "2020-07"; then
     --output-dir output/patches/2020-07/benthic \
     --patch-size 622 \
     --border-blur 0 \
-    --corner-margin 972 \
+    --corner-margin 1000 \
     --edge-margin 296 \
-    --object-threshold 90 \
+    --object-blur 75 \
+    --object-threshold 80 \
     --debug
 
   # Planktic
@@ -127,9 +129,10 @@ if contains allowlist "2020-07"; then
     --output-dir output/patches/2020-07/planktic \
     --patch-size 622 \
     --border-blur 0 \
-    --corner-margin 972 \
+    --corner-margin 1000 \
     --edge-margin 296 \
-    --object-threshold 90 \
+    --object-blur 75 \
+    --object-threshold 85 \
     --debug
 
   # Sediment
@@ -138,9 +141,9 @@ if contains allowlist "2020-07"; then
     --output-dir output/patches/2020-07/sediment \
     --patch-size 622 \
     --border-blur 0 \
-    --corner-margin 972 \
+    --corner-margin 1000 \
     --edge-margin 296 \
-    --object-blur 35 \
+    --object-blur 75 \
     --object-threshold 70 \
     --debug
 fi
