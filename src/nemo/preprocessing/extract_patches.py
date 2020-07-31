@@ -80,6 +80,61 @@ def add_bbox(stats, image):
     return bbox_image
 
 
+def find_objects(
+    image: np.ndarray,
+    object_blur: int,
+    object_threshold: int,
+    border_blur: int,
+    border_threshold: int,
+    edge_margin: int,
+    corner_margin: int,
+    min_pixel_count: int = 1024,
+):
+    image_binary = compute_binary_mask(image, blur_size=object_blur, threshold=object_threshold)
+
+    # Remove the "metal border" from the object mask.
+    if border_blur and border_threshold:
+        # Binary mask for finding the "metal border".
+        # TODO: Make blur size configurable?
+        border_binary = compute_binary_mask(image, blur_size=border_blur, threshold=border_threshold)
+
+        # Find the "metal border" component based on area.
+        _, image_cc, stats, _ = cv.connectedComponentsWithStats(border_binary)
+        # Assume that the metal border is the component with the largest area,
+        # after ignoring the "background" that is always labeled as 0.
+        border_label = np.argmax(stats[1:, cv.CC_STAT_AREA]) + 1 if stats.shape[0] > 1 else -1
+
+        # Remove candidate objects also identified as border candidates.
+        image_binary[image_cc == border_label] = 0
+
+    # Remove objects too close to the edges.
+    if edge_margin:
+        image_binary[0:edge_margin] = 0  # Left edge
+        image_binary[-edge_margin:-1] = 0  # Right edge
+        image_binary[:, 0:edge_margin] = 0  # Top edge
+        image_binary[:, -edge_margin:-1] = 0  # Bottom edge
+
+    # Remove objects in the corners.
+    if corner_margin:
+        image_binary[0:corner_margin, 0:corner_margin] = 0  # Top left corner
+        image_binary[0:corner_margin, -corner_margin:-1] = 0  # Top right corner
+        image_binary[-corner_margin:-1, -corner_margin:-1] = 0  # Bottom right corner
+        image_binary[-corner_margin:-1, 0:corner_margin] = 0  # Bottom left corner
+
+    # Find all regions of interest.
+    _, image_cc, stats, centroids = cv.connectedComponentsWithStats(image_binary)
+    stats, centroids = stats[1:], centroids[1:].astype(int)
+
+    # Remove objects with fewer than specified number of pixels.
+    labels, pixel_counts = np.unique(image_cc[image_cc > 0], return_counts=True)
+    image_binary[np.isin(image_cc, labels[pixel_counts < min_pixel_count])] = 0
+
+    accept_idx = pixel_counts >= min_pixel_count
+    stats, centroids = stats[accept_idx], centroids[accept_idx]
+
+    return image_binary, centroids, stats
+
+
 def extract_patches(
     source_dir: Path,
     output_dir: Path,
@@ -104,6 +159,7 @@ def extract_patches(
     print("Output directory:", output_dir)
     print("Patch dimensions:", [patch_width, patch_height])
     print("-" * 72)
+
     for image_file in sorted(source_dir.rglob("*.tiff")):
         print(image_file)
 
@@ -123,44 +179,17 @@ def extract_patches(
 
         # Binary mask used for finding objects.
         # TODO: Make blur size configurable?
-        image_binary = compute_binary_mask(image, blur_size=object_blur, threshold=object_threshold)
+        image_binary, centroids, stats = find_objects(
+            image,
+            object_blur,
+            object_threshold,
+            border_blur,
+            border_threshold,
+            edge_margin,
+            corner_margin,
+        )
 
-        # Remove the "metal border" from the object mask.
-        if border_blur and border_threshold:
-            # Binary mask for finding the "metal border".
-            # TODO: Make blur size configurable?
-            border_binary = compute_binary_mask(image, blur_size=border_blur, threshold=border_threshold)
-
-            # Find the "metal border" component based on area.
-            _, image_cc, stats, _ = cv.connectedComponentsWithStats(border_binary)
-            # Assume that the metal border is the component with the largest area,
-            # after ignoring the "background" that is always labeled as 0.
-            border_label = np.argmax(stats[1:, cv.CC_STAT_AREA]) + 1 if stats.shape[0] > 1 else -1
-
-            # Remove candidate objects also identified as border candidates.
-            image_binary[image_cc == border_label] = 0
-
-        # Remove objects too close to the edges.
-        if edge_margin:
-            image_binary[0:edge_margin] = 0  # Left edge
-            image_binary[-edge_margin:-1] = 0  # Right edge
-            image_binary[:, 0:edge_margin] = 0  # Top edge
-            image_binary[:, -edge_margin:-1] = 0  # Bottom edge
-
-        # Remove objects in the corners.
-        if corner_margin:
-            image_binary[0:corner_margin, 0:corner_margin] = 0  # Top left corner
-            image_binary[0:corner_margin, -corner_margin:-1] = 0  # Top right corner
-            image_binary[-corner_margin:-1, -corner_margin:-1] = 0  # Bottom right corner
-            image_binary[-corner_margin:-1, 0:corner_margin] = 0  # Bottom left corner
-
-        # Find all regions of interest.
-        n_labels, image_cc, stats, centroids = cv.connectedComponentsWithStats(image_binary)
-        centroids = centroids.astype(int)
-
-        # Remove objects with fewer than specified number of pixels.
-        labels, pixel_counts = np.unique(image_cc[image_cc > 0], return_counts=True)
-        image_binary[np.isin(image_cc, labels[pixel_counts < 1024])] = 0
+        n_objects = centroids.shape[0]
 
         if debug_mode:
             # Save object mask image.
@@ -172,21 +201,13 @@ def extract_patches(
             image_overlay = cv.addWeighted(image_seg, OVERLAY_ALPHA, image, 1 - OVERLAY_ALPHA, 0)
             save_image(output_file, image_overlay, postfix="overlay")
 
-        # Create an image with bounding boxes. Useful for visual debugging.
-        image_bbox = image.copy()
+            # Create an image with bounding boxes. Useful for visual debugging.
+            image_bbox = image.copy()
+            for i in range(n_objects):
+                image_bbox = add_bbox(stats[i], image_bbox)
+            save_image(output_file, image_bbox, postfix="bbox")
 
-        patch_num = 0
-        for i in range(1, n_labels):
-            # Ignore patch candidates below defined pixel count threshold.
-            # TODO(thomasjo): Make this configurable?
-            if np.isin(i, labels[pixel_counts < 1024]):
-                continue
-
-            patch_num += 1
-
-            # Add bounding box for object to bounding box image.
-            image_bbox = add_bbox(stats[i], image_bbox)
-
+        for i in range(n_objects):
             # Extract and save image patch from object.
             cx, cy = centroids[i]
 
@@ -209,18 +230,14 @@ def extract_patches(
             row_crop = slice(cy - patch_height // 2, cy + patch_height // 2)
 
             # Save patch for the main source image frame.
-            patch_postfix = f"patch-{patch_num:03d}"
+            patch_postfix = f"patch-{i:03d}"
             save_image(output_file, raw_image[row_crop, col_crop], postfix=patch_postfix)
 
+            # Save patches for other source image frames for e.g. alternative exposure settings, etc.
             if aux_images is not None:
-                # Save patches for other source image frames for e.g. alternative exposure settings, etc.
                 for idx, aux_image in enumerate(aux_images, start=1):
                     aux_postfix = f"{patch_postfix}--aux-{idx}"
                     save_image(output_file, aux_image[row_crop, col_crop], postfix=aux_postfix)
-
-        if debug_mode:
-            # Save bounding box image.
-            save_image(output_file, image_bbox, postfix="bbox")
 
     print()
 
@@ -242,7 +259,7 @@ def parse_args():
     parser.add_argument("--corner-margin", type=int, metavar="INT", default=0, help="margin outside the detection region")
     parser.add_argument("--edge-margin", type=int, metavar="INT", default=122, help="margin outside the detection region")
 
-    parser.add_argument("--debug", action="store_true", help="margin outside the detection region")
+    parser.add_argument("--debug", action="store_true", help="enable debug mode")
 
     return parser.parse_args()
 
