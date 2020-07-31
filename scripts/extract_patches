@@ -108,6 +108,7 @@ if contains allowlist "2020-07"; then
     --source-dir data/raw/2020-07/agglutinated \
     --output-dir output/patches/2020-07/agglutinated \
     --patch-size 622 \
+    --min-pixel-count 2488 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
@@ -120,6 +121,7 @@ if contains allowlist "2020-07"; then
     --source-dir data/raw/2020-07/benthic \
     --output-dir output/patches/2020-07/benthic \
     --patch-size 622 \
+    --min-pixel-count 2488 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
@@ -132,6 +134,7 @@ if contains allowlist "2020-07"; then
     --source-dir data/raw/2020-07/planktic \
     --output-dir output/patches/2020-07/planktic \
     --patch-size 622 \
+    --min-pixel-count 2488 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
@@ -144,6 +147,7 @@ if contains allowlist "2020-07"; then
     --source-dir data/raw/2020-07/sediment \
     --output-dir output/patches/2020-07/sediment \
     --patch-size 622 \
+    --min-pixel-count 2488 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
