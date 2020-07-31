@@ -139,14 +139,15 @@ def extract_patches(
     source_dir: Path,
     output_dir: Path,
     *,
-    patch_size: int,
-    border_blur: int,
-    border_threshold: int,
-    object_blur: int,
-    object_threshold: int,
-    corner_margin: int,
-    edge_margin: int,
-    debug_mode: bool,
+    patch_size: int = 256,
+    border_blur: int = 0,
+    border_threshold: int = 0,
+    object_blur: int = 0,
+    object_threshold: int = 0,
+    corner_margin: int = 0,
+    edge_margin: int = 0,
+    min_pixel_count: int = 1024,
+    debug_mode: bool = False,
 ):
     # Recreate output directory on every execution.
     shutil.rmtree(output_dir, ignore_errors=True)
@@ -187,6 +188,7 @@ def extract_patches(
             border_threshold,
             edge_margin,
             corner_margin,
+            min_pixel_count,
         )
 
         n_objects = centroids.shape[0]
@@ -233,11 +235,10 @@ def extract_patches(
             patch_postfix = f"patch-{i:03d}"
             save_image(output_file, raw_image[row_crop, col_crop], postfix=patch_postfix)
 
-            # Save patches for other source image frames for e.g. alternative exposure settings, etc.
+            # Save patches for auxillary image frames used for e.g. alternative exposure settings, etc.
             if aux_images is not None:
                 for idx, aux_image in enumerate(aux_images, start=1):
-                    aux_postfix = f"{patch_postfix}--aux-{idx}"
-                    save_image(output_file, aux_image[row_crop, col_crop], postfix=aux_postfix)
+                    save_image(output_file, aux_image[row_crop, col_crop], postfix=f"{patch_postfix}--aux-{idx}")
 
     print()
 
@@ -259,6 +260,8 @@ def parse_args():
     parser.add_argument("--corner-margin", type=int, metavar="INT", default=0, help="margin outside the detection region")
     parser.add_argument("--edge-margin", type=int, metavar="INT", default=122, help="margin outside the detection region")
 
+    parser.add_argument("--min-pixel-count", type=int, metavar="INT", default=1024, help="minimum number of pixels required for a candidate object")
+
     parser.add_argument("--debug", action="store_true", help="enable debug mode")
 
     return parser.parse_args()
@@ -277,5 +280,6 @@ if __name__ == "__main__":
         object_threshold=args.object_threshold,
         corner_margin=args.corner_margin,
         edge_margin=args.edge_margin,
+        min_pixel_count=args.min_pixel_count,
         debug_mode=args.debug,
     )
