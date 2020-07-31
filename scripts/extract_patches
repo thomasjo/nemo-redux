@@ -2,6 +2,10 @@
 
 set -eu
 
+# This script is used to extract image patches that are used to construct an
+# object classification dataset. The resulting patches need to be manually
+# curated to remove potential false positives.
+
 function contains() {
   local array="$1[@]"
   local seeking="$2"
