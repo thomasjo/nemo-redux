@@ -2,6 +2,13 @@
 
 set -eu
 
+# This script is used to extract object masks that are used to construct an
+# object segmentation dataset. The resulting masks need to be manually tuned.
+#
+# Most parameters are tuned in such a way as to give more false positives than
+# false negatives. The rationale is that is easier to remove incorrect masks
+# than it is manually create missing masks.
+
 function contains() {
   local array="$1[@]"
   local seeking="$2"
@@ -144,6 +151,6 @@ if contains allowlist "2020-07"; then
     --corner-margin 1000 \
     --edge-margin 296 \
     --object-blur 27 \
-    --object-threshold 55 \
+    --object-threshold 60 \
     --debug
 fi
