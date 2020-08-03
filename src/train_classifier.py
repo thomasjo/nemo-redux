@@ -7,7 +7,6 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader, RandomSampler
-from torchvision.utils import save_image  # noqa
 
 from nemo.datasets import prepare_datasets
 from nemo.models import initialize_classifier
@@ -48,7 +47,8 @@ def main(args):
     train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
     num_classes = len(train_dataset.classes)
 
-    num_training_samples = 4 * len(train_dataset)  # Oversample to get more random augmentations
+    sampling_factor = 4  # Oversample to get more random augmentations
+    num_training_samples = sampling_factor * len(train_dataset)
     train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
 
     train_dataloader = DataLoader(train_dataset, batch_size=32, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
@@ -71,11 +71,12 @@ def parse_args():
 
     parser.add_argument("--data-dir", type=Path, metavar="PATH", required=True, help="path to partitioned data directory")
     parser.add_argument("--output-dir", type=Path, metavar="PATH", required=True, help="path to output directory")
-    parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
+
     parser.add_argument("--num-gpus", type=int, metavar="NUM", default=1, help="number of GPUs to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=2, help="number of workers to use for data loaders")
 
-    parser.add_argument("--dev", action="store_true", help="run training, validation and test with only one batch")
+    parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
+    parser.add_argument("--dev", action="store_true", help="run each model phase with only one batch")
 
     return parser.parse_args()
 
