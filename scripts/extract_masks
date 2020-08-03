@@ -37,7 +37,7 @@ if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
   # mean: 3687
 
   # Agglutinated
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/agglutinated \
     --output-dir output/objects/2019-06/agglutinated \
     --corner-margin 400 \
@@ -45,7 +45,7 @@ if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
     --debug
 
   # Benthic
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/benthic \
     --output-dir output/objects/2019-06/benthic \
     --corner-margin 400 \
@@ -53,7 +53,7 @@ if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
     --debug
 
   # Planktic
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/planktic \
     --output-dir output/objects/2019-06/planktic \
     --corner-margin 400 \
@@ -61,7 +61,7 @@ if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
     --debug
 
   # Sediment
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/sediment \
     --output-dir output/objects/2019-06/sediment \
     --corner-margin 400 \
@@ -77,7 +77,7 @@ if contains allowlist "2020-05"; then
   # mean: 3645
 
   # Benthic
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-05/benthic \
     --output-dir output/objects/2020-05/benthic \
     --border-blur 0 \
@@ -86,7 +86,7 @@ if contains allowlist "2020-05"; then
     --debug
 
   # Planktic
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-05/planktic \
     --output-dir output/objects/2020-05/planktic \
     --border-blur 0 \
@@ -107,7 +107,7 @@ if contains allowlist "2020-07"; then
   # patch size: 256 * scale ≃ 622
 
   # Agglutinated
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/agglutinated \
     --output-dir output/objects/2020-07/agglutinated \
     --min-pixel-count 2048 \
@@ -119,7 +119,7 @@ if contains allowlist "2020-07"; then
     --debug
 
   # Benthic
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/benthic \
     --output-dir output/objects/2020-07/benthic \
     --min-pixel-count 2048 \
@@ -131,7 +131,7 @@ if contains allowlist "2020-07"; then
     --debug
 
   # Planktic
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/planktic \
     --output-dir output/objects/2020-07/planktic \
     --min-pixel-count 2048 \
@@ -143,7 +143,7 @@ if contains allowlist "2020-07"; then
     --debug
 
   # Sediment
-  python src/nemo/preprocessing/extract_masks.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/sediment \
     --output-dir output/objects/2020-07/sediment \
     --min-pixel-count 2048 \
