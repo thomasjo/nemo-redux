@@ -3,27 +3,35 @@ import torch.nn as nn
 import torch.optim as optim
 
 from pytorch_lightning import LightningModule
-from torchvision.models import vgg16, vgg16_bn  # noqa
+from torchvision.models import vgg16_bn
 
 
 class Classifier(LightningModule):
     def __init__(self, feature_extractor, num_features, num_classes):
         super().__init__()
 
+        self.criterion = nn.NLLLoss()
+
         self.feature_extractor = feature_extractor
         self.pool = nn.AdaptiveAvgPool2d((7, 7))
 
         self.classifier = nn.Sequential(
+            # fc1
             nn.Linear(num_features, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.2),
+            # fc2
             nn.Linear(512, 32),
+            nn.BatchNorm1d(32),
             nn.ReLU(inplace=True),
             nn.Dropout(0.2),
+            # predictions
             nn.Linear(32, num_classes),
         )
 
-        self.criterion = nn.NLLLoss()
+        # Disable fine-tuning by default.
+        self.requires_finetuning(False)
 
     def forward(self, x):
         x = self.feature_extractor(x)
@@ -36,9 +44,25 @@ class Classifier(LightningModule):
 
     def train(self, mode=True):
         super().train(mode)
-        self.feature_extractor.eval()
+
+        # Only enable feature extractor training mode when fine-tuning.
+        finetuning_mode = self.finetuning and mode
+        self.feature_extractor.train(finetuning_mode)
 
         return self
+
+    def requires_finetuning(self, finetuning=True):
+        self.finetuning = finetuning
+
+        all_modules = list(self.feature_extractor.children())
+        for module in all_modules:
+            module.requires_grad_(False)
+            module.train(False)
+
+        finetune_modules = all_modules[-20:]
+        for module in finetune_modules:
+            module.requires_grad_(self.finetuning)
+            module.train(self.finetuning)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-5)
@@ -121,14 +145,9 @@ class Classifier(LightningModule):
 
 
 def initialize_feature_extractor():
-    # full_model = vgg16_bn(pretrained=True)
-    full_model = vgg16(pretrained=True)
+    full_model = vgg16_bn(pretrained=True)
     feature_extractor = full_model.features
     num_features = full_model.classifier[0].in_features
-
-    feature_extractor.eval()
-    for param in feature_extractor.parameters():
-        param.requires_grad = False
 
     return feature_extractor, num_features
 
