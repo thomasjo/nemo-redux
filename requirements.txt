@@ -44,7 +44,7 @@ smmap==3.0.4
 subprocess32==3.5.4
 tensorboard==2.3.0
 tensorboard-plugin-wit==1.7.0
-torch==1.5.1
+torch==1.6.0
 torchsummary==1.5.1
 tqdm==4.48.2
 urllib3==1.25.10
