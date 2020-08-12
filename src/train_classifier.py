@@ -1,42 +1,21 @@
-from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from argparse import ArgumentParser
 from pathlib import Path
 
-import pytorch_lightning
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import wandb
 
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
-from pytorch_lightning.loggers import WandbLogger
+from ignite.engine import Events, create_supervised_evaluator, create_supervised_trainer
+from ignite.metrics import Accuracy, Loss
 from torch.utils.data import DataLoader, RandomSampler
 
 from nemo.datasets import prepare_datasets
 from nemo.models import initialize_classifier
-from nemo.utils import ensure_reproducibility, ignore_warnings, timestamped_path
-
-
-def create_trainer(args):
-    early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=3)
-    model_checkpoint = ModelCheckpoint(str(args.output_dir), monitor="val_loss", mode="min", save_top_k=3)
-    logger = WandbLogger(save_dir=str(args.output_dir)) if not args.dev else None
-
-    trainer = Trainer(
-        gpus=args.num_gpus,
-        fast_dev_run=args.dev,
-        max_epochs=args.max_epochs,
-        early_stop_callback=early_stopping,
-        checkpoint_callback=model_checkpoint,
-        # Configure logging...
-        logger=logger,
-        log_save_interval=1,
-        row_log_interval=1,
-        progress_bar_refresh_rate=1,
-        weights_summary=None,
-    )
-
-    return trainer
+from nemo.utils import ensure_reproducibility, timestamped_path
 
 
 def main(args):
-    ignore_warnings(pytorch_lightning)
     ensure_reproducibility(seed=42)
 
     # Append timestamp to output directory.
@@ -44,6 +23,94 @@ def main(args):
     args.output_dir.mkdir(parents=True)
 
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
+    train_dataloader, val_dataloader, test_dataloader, num_classes = prepare_dataloaders(args.data_dir)
+
+    wandb.init(dir=str(args.output_dir))
+
+    model = initialize_classifier(num_classes)
+    model.to(device=args.device)
+
+    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    criterion = nn.NLLLoss()
+
+    metrics = metrics = {
+        "accuracy": Accuracy(),
+        "loss": Loss(criterion),
+    }
+
+    log_interval = 1 if args.dev_mode else 10
+    max_epochs = 2 if args.dev_mode else args.max_epochs
+    epoch_length = 2 if args.dev_mode else None
+
+    wandb.watch(model, criterion, log_freq=log_interval)
+
+    trainer = create_supervised_trainer(model, optimizer, criterion, device=args.device)
+    evaluator = create_supervised_evaluator(model, metrics, device=args.device)
+
+    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
+    def log_training_loss(engine):
+        wandb.log({
+            "train/loss": engine.state.output,
+        })
+
+        print("Epoch[{}] Iteration[{}/{}] Loss: {:.2f}".format(
+            engine.state.epoch,
+            engine.state.iteration,
+            epoch_length,
+            engine.state.output,
+        ))
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def log_training_results(engine):
+        evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+
+        metrics = evaluator.state.metrics
+        avg_accuracy = metrics["accuracy"]
+        avg_loss = metrics["loss"]
+
+        wandb.log({
+            "train/avg_accuracy": avg_accuracy,
+            "train/avg_loss": avg_loss,
+        })
+
+        print("Training Results\tEpoch: {}\tAccuracy: {:.2f}\tLoss: {:.2f}".format(
+            engine.state.epoch,
+            avg_accuracy,
+            avg_loss,
+        ))
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def log_validation_results(engine):
+        val_epochs = max_epochs if args.dev_mode else None
+        val_epoch_length = epoch_length if args.dev_mode else None
+
+        evaluator.run(val_dataloader, max_epochs=val_epochs, epoch_length=val_epoch_length)
+
+        metrics = evaluator.state.metrics
+        avg_accuracy = metrics["accuracy"]
+        avg_loss = metrics["loss"]
+
+        wandb.log({
+            "val/avg_accuracy": avg_accuracy,
+            "val/avg_loss": avg_loss,
+        })
+
+        print("Validation Results\tEpoch: {}\tAccuracy: {:.2f}\tLoss: {:.2f}".format(
+            engine.state.epoch,
+            avg_accuracy,
+            avg_loss,
+        ))
+
+    @trainer.on(Events.EPOCH_COMPLETED | Events.COMPLETED)
+    def log_time(engine):
+        print("{} took {} seconds".format(trainer.last_event_name.name, trainer.state.times[trainer.last_event_name.name]))
+
+    trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+
+    # TODO(thomasjo): Save model weights; use ModelCheckpoint perhaps?
+
+
+def prepare_dataloaders(data_dir, batch_size=32):
     train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
     num_classes = len(train_dataset.classes)
 
@@ -51,32 +118,22 @@ def main(args):
     num_training_samples = sampling_factor * len(train_dataset)
     train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=32, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
-    model = initialize_classifier(num_classes)
-
-    if args.dev:
-        from torchsummary import summary
-        summary(model, (3, 224, 224), train_dataloader.batch_size, device="cpu")
-
-    trainer = create_trainer(args)
-    trainer.fit(model, train_dataloader, val_dataloader)
-    trainer.test(model, test_dataloader)
+    return train_dataloader, val_dataloader, test_dataloader, num_classes
 
 
 def parse_args():
-    parser = ArgumentParser(formatter_class=lambda prog: ArgumentDefaultsHelpFormatter(prog, max_help_position=100))
+    parser = ArgumentParser()
 
     parser.add_argument("--data-dir", type=Path, metavar="PATH", required=True, help="path to partitioned data directory")
     parser.add_argument("--output-dir", type=Path, metavar="PATH", required=True, help="path to output directory")
-
-    parser.add_argument("--num-gpus", type=int, metavar="NUM", default=1, help="number of GPUs to use for model training")
+    parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=2, help="number of workers to use for data loaders")
-
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
-    parser.add_argument("--dev", action="store_true", help="run each model phase with only one batch")
+    parser.add_argument("--dev-mode", action="store_true", help="run each model phase with only one batch")
 
     return parser.parse_args()
 
