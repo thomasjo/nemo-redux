@@ -4,10 +4,11 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import wandb
 
+from ignite.contrib.handlers import WandBLogger
 from ignite.engine import Events, create_supervised_evaluator, create_supervised_trainer
 from ignite.metrics import Accuracy, Loss
+from ignite.utils import setup_logger
 from torch.utils.data import DataLoader, RandomSampler
 
 from nemo.datasets import prepare_datasets
@@ -22,10 +23,13 @@ def main(args):
     args.output_dir = timestamped_path(args.output_dir)
     args.output_dir.mkdir(parents=True)
 
+    # Development mode overrides...
+    log_interval = 1 if args.dev_mode else 10
+    max_epochs = 2 if args.dev_mode else args.max_epochs
+    epoch_length = 2 if args.dev_mode else None
+
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
     train_dataloader, val_dataloader, test_dataloader, num_classes = prepare_dataloaders(args.data_dir)
-
-    wandb.init(dir=str(args.output_dir))
 
     model = initialize_classifier(num_classes)
     model.to(device=args.device)
@@ -33,27 +37,22 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
     criterion = nn.NLLLoss()
 
+    trainer = create_supervised_trainer(model, optimizer, criterion, device=args.device)
+    trainer.logger = setup_logger("trainer")
+
     metrics = metrics = {
-        "accuracy": Accuracy(),
         "loss": Loss(criterion),
+        "accuracy": Accuracy(),
     }
 
-    log_interval = 1 if args.dev_mode else 10
-    max_epochs = 2 if args.dev_mode else args.max_epochs
-    epoch_length = 2 if args.dev_mode else None
-
-    wandb.watch(model, criterion, log_freq=log_interval)
-
-    trainer = create_supervised_trainer(model, optimizer, criterion, device=args.device)
-    evaluator = create_supervised_evaluator(model, metrics, device=args.device)
+    train_evaluator = create_supervised_evaluator(model, metrics, device=args.device)
+    train_evaluator.logger = setup_logger("train_evaluator")
+    val_evaluator = create_supervised_evaluator(model, metrics, device=args.device)
+    val_evaluator.logger = setup_logger("val_evaluator")
 
     @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
     def log_training_loss(engine):
-        wandb.log({
-            "train/loss": engine.state.output,
-        })
-
-        print("Epoch[{}] Iteration[{}/{}] Loss: {:.2f}".format(
+        engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.2f}".format(
             engine.state.epoch,
             engine.state.iteration,
             epoch_length,
@@ -61,53 +60,52 @@ def main(args):
         ))
 
     @trainer.on(Events.EPOCH_COMPLETED)
-    def log_training_results(engine):
-        evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+    def compute_metrics(engine):
+        train_evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+        val_evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
 
-        metrics = evaluator.state.metrics
-        avg_accuracy = metrics["accuracy"]
-        avg_loss = metrics["loss"]
+    # TODO(thomasjo): Print epoch metrics?
+    # @trainer.on(Events.EPOCH_COMPLETED)
+    # def log_validation_results(engine):
+    #     val_epochs = max_epochs if args.dev_mode else None
+    #     val_epoch_length = epoch_length if args.dev_mode else None
 
-        wandb.log({
-            "train/avg_accuracy": avg_accuracy,
-            "train/avg_loss": avg_loss,
-        })
+    #     evaluator.run(val_dataloader, max_epochs=val_epochs, epoch_length=val_epoch_length)
+    #     metrics = evaluator.state.metrics
 
-        print("Training Results\tEpoch: {}\tAccuracy: {:.2f}\tLoss: {:.2f}".format(
-            engine.state.epoch,
-            avg_accuracy,
-            avg_loss,
-        ))
+    #     print("Validation Results\tEpoch: {}\tAccuracy: {:.2f}\tLoss: {:.2f}".format(
+    #         engine.state.epoch,
+    #         metrics["accuracy"],
+    #         metrics["loss"],
+    #     ))
 
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def log_validation_results(engine):
-        val_epochs = max_epochs if args.dev_mode else None
-        val_epoch_length = epoch_length if args.dev_mode else None
+    # Configure W&B logging.
+    wandb_logger = WandBLogger(dir=str(args.output_dir))
+    wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
+    wandb_logger.attach_opt_params_handler(trainer, Events.ITERATION_COMPLETED(every=log_interval), optimizer=optimizer)
 
-        evaluator.run(val_dataloader, max_epochs=val_epochs, epoch_length=val_epoch_length)
+    wandb_logger.attach_output_handler(
+        trainer,
+        Events.ITERATION_COMPLETED(every=log_interval),
+        tag="train",
+        output_transform=lambda loss: {"batchloss": loss},
+    )
 
-        metrics = evaluator.state.metrics
-        avg_accuracy = metrics["accuracy"]
-        avg_loss = metrics["loss"]
-
-        wandb.log({
-            "val/avg_accuracy": avg_accuracy,
-            "val/avg_loss": avg_loss,
-        })
-
-        print("Validation Results\tEpoch: {}\tAccuracy: {:.2f}\tLoss: {:.2f}".format(
-            engine.state.epoch,
-            avg_accuracy,
-            avg_loss,
-        ))
-
-    @trainer.on(Events.EPOCH_COMPLETED | Events.COMPLETED)
-    def log_time(engine):
-        print("{} took {} seconds".format(trainer.last_event_name.name, trainer.state.times[trainer.last_event_name.name]))
-
-    trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+    for tag, evaluator in [("train", train_evaluator), ("val", val_evaluator)]:
+        wandb_logger.attach_output_handler(
+            evaluator,
+            Events.EPOCH_COMPLETED,
+            tag=tag,
+            metric_names=list(metrics.keys()),
+            global_step_transform=lambda *_: trainer.state.iteration,
+        )
 
     # TODO(thomasjo): Save model weights; use ModelCheckpoint perhaps?
+    # def score_function(engine):
+    #     return engine.state.metrics["accuracy"]
+
+    # Kick-off model training...
+    trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
 
 
 def prepare_dataloaders(data_dir, batch_size=32):
