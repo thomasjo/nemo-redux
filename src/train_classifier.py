@@ -37,64 +37,62 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
     criterion = nn.NLLLoss()
 
-    trainer = create_supervised_trainer(model, optimizer, criterion, device=args.device)
-    trainer.logger = setup_logger("trainer")
+    trainer = create_supervised_trainer(
+        model,
+        optimizer,
+        criterion,
+        device=args.device,
+        non_blocking=True,
+    )
 
     metrics = metrics = {
         "loss": Loss(criterion),
         "accuracy": Accuracy(),
     }
 
-    train_evaluator = create_supervised_evaluator(model, metrics, device=args.device)
-    train_evaluator.logger = setup_logger("train_evaluator")
-    val_evaluator = create_supervised_evaluator(model, metrics, device=args.device)
-    val_evaluator.logger = setup_logger("val_evaluator")
-
-    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
-    def log_training_loss(engine):
-        engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.2f}".format(
-            engine.state.epoch,
-            engine.state.iteration,
-            epoch_length,
-            engine.state.output,
-        ))
+    train_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True)
+    val_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def compute_metrics(engine):
         train_evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
         val_evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
 
-    # TODO(thomasjo): Print epoch metrics?
-    # @trainer.on(Events.EPOCH_COMPLETED)
-    # def log_validation_results(engine):
-    #     val_epochs = max_epochs if args.dev_mode else None
-    #     val_epoch_length = epoch_length if args.dev_mode else None
+    # Configure basic logging.
+    trainer.logger = setup_logger("trainer")
+    train_evaluator.logger = setup_logger("train_evaluator")
+    val_evaluator.logger = setup_logger("val_evaluator")
 
-    #     evaluator.run(val_dataloader, max_epochs=val_epochs, epoch_length=val_epoch_length)
-    #     metrics = evaluator.state.metrics
-
-    #     print("Validation Results\tEpoch: {}\tAccuracy: {:.2f}\tLoss: {:.2f}".format(
-    #         engine.state.epoch,
-    #         metrics["accuracy"],
-    #         metrics["loss"],
-    #     ))
+    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
+    def log_training_loss(engine):
+        engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.4f}".format(
+            engine.state.epoch,
+            engine.state.iteration,
+            epoch_length,
+            engine.state.output,
+        ))
 
     # Configure W&B logging.
     wandb_logger = WandBLogger(dir=str(args.output_dir))
     wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
-    wandb_logger.attach_opt_params_handler(trainer, Events.ITERATION_COMPLETED(every=log_interval), optimizer=optimizer)
+
+    wandb_logger.attach_opt_params_handler(
+        trainer,
+        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        optimizer=optimizer,
+    )
 
     wandb_logger.attach_output_handler(
         trainer,
-        Events.ITERATION_COMPLETED(every=log_interval),
-        tag="train",
+        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        tag="training",
         output_transform=lambda loss: {"batchloss": loss},
     )
 
-    for tag, evaluator in [("train", train_evaluator), ("val", val_evaluator)]:
+    for tag, evaluator in [("training", train_evaluator), ("validation", val_evaluator)]:
         wandb_logger.attach_output_handler(
             evaluator,
-            Events.EPOCH_COMPLETED,
+            event_name=Events.EPOCH_COMPLETED,
             tag=tag,
             metric_names=list(metrics.keys()),
             global_step_transform=lambda *_: trainer.state.iteration,
