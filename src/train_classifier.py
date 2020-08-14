@@ -74,7 +74,7 @@ def main(args):
         engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.4f}".format(
             engine.state.epoch,
             engine.state.iteration,
-            epoch_length,
+            engine.state.max_epochs * engine.state.epoch_length,
             engine.state.output,
         ))
 
