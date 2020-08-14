@@ -23,13 +23,14 @@ def main(args):
     args.output_dir = timestamped_path(args.output_dir)
     args.output_dir.mkdir(parents=True)
 
-    # Development mode overrides...
+    # Development mode overrides.
     log_interval = 1 if args.dev_mode else 10
     max_epochs = 2 if args.dev_mode else args.max_epochs
     epoch_length = 2 if args.dev_mode else None
 
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
-    train_dataloader, val_dataloader, test_dataloader, num_classes = prepare_dataloaders(args.data_dir)
+    train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir)
+    num_classes = len(train_dataloader.dataset.classes)
 
     model = initialize_classifier(num_classes)
     model.to(device=args.device)
@@ -118,7 +119,6 @@ def main(args):
 
 def prepare_dataloaders(data_dir, batch_size=32):
     train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
-    num_classes = len(train_dataset.classes)
 
     sampling_factor = 4  # Oversample to get more random augmentations
     num_training_samples = sampling_factor * len(train_dataset)
@@ -128,7 +128,7 @@ def prepare_dataloaders(data_dir, batch_size=32):
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
-    return train_dataloader, val_dataloader, test_dataloader, num_classes
+    return train_dataloader, val_dataloader, test_dataloader
 
 
 def parse_args():
