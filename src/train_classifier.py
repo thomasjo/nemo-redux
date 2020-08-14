@@ -45,13 +45,19 @@ def main(args):
         non_blocking=True,
     )
 
+    def evaluator_transform(x, y, y_pred):
+        return {"x": x, "y": y, "y_pred": y_pred}
+
+    def metric_transform(output):
+        return output["y_pred"], output["y"]
+
     metrics = metrics = {
-        "loss": Loss(criterion),
+        "loss": Loss(criterion, output_transform=metric_transform),
         "accuracy": Accuracy(),
     }
 
-    train_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True)
-    val_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True)
+    train_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True, output_transform=evaluator_transform)
+    val_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True, output_transform=evaluator_transform)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def compute_metrics(engine: Engine):
@@ -94,7 +100,7 @@ def main(args):
             evaluator,
             event_name=Events.EPOCH_COMPLETED,
             tag=tag,
-            metric_names=list(metrics.keys()),
+            metric_names="all",
             global_step_transform=lambda *_: trainer.state.iteration,
         )
 
