@@ -82,6 +82,10 @@ def main(args):
     wandb_logger = WandBLogger(dir=str(args.output_dir))
     wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
 
+    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
+    def log_training_epoch(engine: Engine):
+        wandb_logger.log({"epoch": engine.state.epoch}, step=trainer.state.iteration)
+
     wandb_logger.attach_opt_params_handler(
         trainer,
         event_name=Events.ITERATION_COMPLETED(every=log_interval),
