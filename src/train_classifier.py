@@ -62,8 +62,12 @@ def main(args):
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def compute_metrics(engine: Engine):
-        train_evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
-        val_evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+        # Development mode overrides.
+        max_epochs_ = max_epochs if args.dev_mode else None
+        epoch_length_ = epoch_length if args.dev_mode else None
+
+        train_evaluator.run(train_dataloader, max_epochs=max_epochs_, epoch_length=epoch_length_)
+        val_evaluator.run(val_dataloader, max_epochs=max_epochs_, epoch_length=epoch_length_)
 
     # Configure basic logging.
     trainer.logger = setup_logger("trainer")
