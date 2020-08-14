@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from ignite.contrib.handlers import WandBLogger
-from ignite.engine import Events, create_supervised_evaluator, create_supervised_trainer
+from ignite.engine import Engine, Events, create_supervised_evaluator, create_supervised_trainer
 from ignite.metrics import Accuracy, Loss
 from ignite.utils import setup_logger
 from torch.utils.data import DataLoader, RandomSampler
@@ -54,7 +54,7 @@ def main(args):
     val_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True)
 
     @trainer.on(Events.EPOCH_COMPLETED)
-    def compute_metrics(engine):
+    def compute_metrics(engine: Engine):
         train_evaluator.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
         val_evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
 
@@ -64,7 +64,7 @@ def main(args):
     val_evaluator.logger = setup_logger("val_evaluator")
 
     @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
-    def log_training_loss(engine):
+    def log_training_loss(engine: Engine):
         engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.4f}".format(
             engine.state.epoch,
             engine.state.iteration,
