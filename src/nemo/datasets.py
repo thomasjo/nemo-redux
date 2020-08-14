@@ -8,7 +8,6 @@ from nemo.transforms import RandomDiscreteRotation
 
 def prepare_datasets(data_dir: Path):
     # TODO(thomasjo): Read moments from file in data_dir or kwargs?
-    # moments = {"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}  # ImageNet
     moments = {"mean": [0.232, 0.244, 0.269], "std": [0.181, 0.182, 0.190]}  # Dataset
 
     transform = Compose([
