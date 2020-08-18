@@ -1,3 +1,5 @@
+import os
+
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -91,6 +93,9 @@ def main(args):
 
 
 def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log_interval, args):
+    if args.dev_mode:
+        os.environ["WANDB_MODE"] = "dryrun"
+
     wandb_logger = WandBLogger(dir=str(args.output_dir))
     wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
 
