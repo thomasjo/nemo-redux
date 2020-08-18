@@ -9,6 +9,7 @@ import torch.optim as optim
 
 from ignite.contrib.handlers import WandBLogger
 from ignite.engine import Engine, Events, create_supervised_evaluator, create_supervised_trainer
+from ignite.handlers import Checkpoint, DiskSaver
 from ignite.metrics import Accuracy, Loss, RunningAverage
 from ignite.utils import setup_logger
 from torch.utils.data import DataLoader, RandomSampler
@@ -58,7 +59,13 @@ def main(args):
     for name, metric in metrics.items():
         RunningAverage(metric).attach(trainer, name)
 
-    evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True, output_transform=evaluator_transform)
+    evaluator = create_supervised_evaluator(
+        model,
+        metrics,
+        device=args.device,
+        non_blocking=True,
+        output_transform=evaluator_transform,
+    )
 
     # Compute evaluation metrics at the end of every epoch.
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -82,14 +89,43 @@ def main(args):
             engine.state.metrics["accuracy"],
         ))
 
+    # Log training metrics, etc. to Weights & Biases.
     configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log_interval, args)
 
-    # TODO(thomasjo): Save model weights; use ModelCheckpoint perhaps?
-    # def score_function(engine):
-    #     return engine.state.metrics["accuracy"]
+    # Setup model checkpointing.
+    configure_checkpoint_saving(trainer, evaluator, model, optimizer, args)
 
     # Kick-off model training...
     trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+
+
+def prepare_dataloaders(data_dir, batch_size=32):
+    train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
+
+    sampling_factor = 4  # Oversample to get more random augmentations
+    num_training_samples = sampling_factor * len(train_dataset)
+    train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
+
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+
+    return train_dataloader, val_dataloader, test_dataloader
+
+
+def configure_checkpoint_saving(trainer, evaluator, model, optimizer, args):
+    to_save = {"model": model, "optimizer": optimizer}
+    save_handler = DiskSaver(str(args.output_dir), create_dir=False, require_empty=False)
+
+    checkpoint_handler = Checkpoint(
+        to_save,
+        save_handler,
+        score_function=lambda engine: engine.state.metrics["accuracy"],
+        score_name="accuracy",
+        n_saved=2,
+    )
+
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint_handler, evaluator)
 
 
 def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log_interval, args):
@@ -136,35 +172,12 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
     )
 
 
-def prepare_dataloaders(data_dir, batch_size=32):
-    train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
-
-    sampling_factor = 4  # Oversample to get more random augmentations
-    num_training_samples = sampling_factor * len(train_dataset)
-    train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
-
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-
-    return train_dataloader, val_dataloader, test_dataloader
-
-
 def trainer_transform(x, y, y_pred, loss):
-    return {
-        "x": x,
-        "y": y,
-        "y_pred": y_pred,
-        "loss": loss.item(),
-    }
+    return {"x": x, "y": y, "y_pred": y_pred, "loss": loss.item()}
 
 
 def evaluator_transform(x, y, y_pred):
-    return {
-        "x": x,
-        "y": y,
-        "y_pred": y_pred,
-    }
+    return {"x": x, "y": y, "y_pred": y_pred}
 
 
 def metric_transform(output):
