@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from ignite.contrib.handlers import WandBLogger
 from ignite.engine import Engine, Events, create_supervised_evaluator, create_supervised_trainer
-from ignite.metrics import Accuracy, Loss
+from ignite.metrics import Accuracy, Loss, RunningAverage
 from ignite.utils import setup_logger
 from torch.utils.data import DataLoader, RandomSampler
 
@@ -28,6 +28,10 @@ def main(args):
     max_epochs = 2 if args.dev_mode else args.max_epochs
     epoch_length = 2 if args.dev_mode else None
 
+    # Common logging events.
+    epoch_completed = Events.EPOCH_COMPLETED
+    iteration_completed = Events.ITERATION_COMPLETED(every=log_interval)
+
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
     train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir)
     num_classes = len(train_dataloader.dataset.classes)
@@ -44,74 +48,82 @@ def main(args):
         criterion,
         device=args.device,
         non_blocking=True,
+        output_transform=trainer_transform,
     )
-
-    def evaluator_transform(x, y, y_pred):
-        return {"x": x, "y": y, "y_pred": y_pred}
-
-    def metric_transform(output):
-        return output["y_pred"], output["y"]
 
     metrics = metrics = {
         "loss": Loss(criterion, output_transform=metric_transform),
-        "accuracy": Accuracy(),
+        "accuracy": Accuracy(output_transform=metric_transform),
     }
 
-    train_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True, output_transform=evaluator_transform)
-    val_evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True, output_transform=evaluator_transform)
+    # Compute metrics during training.
+    for name, metric in metrics.items():
+        RunningAverage(metric).attach(trainer, name)
 
-    @trainer.on(Events.EPOCH_COMPLETED)
+    evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True, output_transform=evaluator_transform)
+
+    # Compute evaluation metrics at the end of every epoch.
+    @trainer.on(epoch_completed)
     def compute_metrics(engine: Engine):
         # Development mode overrides.
         max_epochs_ = max_epochs if args.dev_mode else None
         epoch_length_ = epoch_length if args.dev_mode else None
-
-        train_evaluator.run(train_dataloader, max_epochs=max_epochs_, epoch_length=epoch_length_)
-        val_evaluator.run(val_dataloader, max_epochs=max_epochs_, epoch_length=epoch_length_)
+        evaluator.run(val_dataloader, max_epochs=max_epochs_, epoch_length=epoch_length_)
 
     # Configure basic logging.
     trainer.logger = setup_logger("trainer")
-    train_evaluator.logger = setup_logger("train_evaluator")
-    val_evaluator.logger = setup_logger("val_evaluator")
+    evaluator.logger = setup_logger("evaluator")
 
-    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
-    def log_training_loss(engine: Engine):
-        engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.4f}".format(
+    @trainer.on(iteration_completed)
+    def log_training_metrics(engine: Engine):
+        engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.4f} Accuracy: {:.4f}".format(
             engine.state.epoch,
             engine.state.iteration,
             engine.state.max_epochs * engine.state.epoch_length,
-            engine.state.output,
+            engine.state.metrics["loss"],
+            engine.state.metrics["accuracy"],
         ))
 
     # Configure W&B logging.
     wandb_logger = WandBLogger(dir=str(args.output_dir))
     wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
 
-    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
+    def step_transform(*args):
+        return trainer.state.iteration
+
+    @trainer.on(iteration_completed)
     def log_training_epoch(engine: Engine):
-        wandb_logger.log({"epoch": engine.state.epoch}, step=trainer.state.iteration)
+        wandb_logger.log({"epoch": engine.state.epoch}, step=step_transform())
 
     wandb_logger.attach_opt_params_handler(
         trainer,
-        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        event_name=iteration_completed,
         optimizer=optimizer,
     )
 
     wandb_logger.attach_output_handler(
         trainer,
-        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        event_name=iteration_completed,
         tag="training",
-        output_transform=lambda loss: {"batchloss": loss},
+        metric_names="all",
+        global_step_transform=step_transform,
     )
 
-    for tag, evaluator in [("training", train_evaluator), ("validation", val_evaluator)]:
-        wandb_logger.attach_output_handler(
-            evaluator,
-            event_name=Events.EPOCH_COMPLETED,
-            tag=tag,
-            metric_names="all",
-            global_step_transform=lambda *_: trainer.state.iteration,
-        )
+    wandb_logger.attach_output_handler(
+        trainer,
+        event_name=epoch_completed,
+        tag="training",
+        metric_names="all",
+        global_step_transform=step_transform,
+    )
+
+    wandb_logger.attach_output_handler(
+        evaluator,
+        event_name=epoch_completed,
+        tag="validation",
+        metric_names="all",
+        global_step_transform=step_transform,
+    )
 
     # TODO(thomasjo): Save model weights; use ModelCheckpoint perhaps?
     # def score_function(engine):
@@ -133,6 +145,27 @@ def prepare_dataloaders(data_dir, batch_size=32):
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
     return train_dataloader, val_dataloader, test_dataloader
+
+
+def trainer_transform(x, y, y_pred, loss):
+    return {
+        "x": x,
+        "y": y,
+        "y_pred": y_pred,
+        "loss": loss.item(),
+    }
+
+
+def evaluator_transform(x, y, y_pred):
+    return {
+        "x": x,
+        "y": y,
+        "y_pred": y_pred,
+    }
+
+
+def metric_transform(output):
+    return output["y_pred"], output["y"]
 
 
 def parse_args():
