@@ -28,10 +28,6 @@ def main(args):
     max_epochs = 2 if args.dev_mode else args.max_epochs
     epoch_length = 2 if args.dev_mode else None
 
-    # Common logging events.
-    epoch_completed = Events.EPOCH_COMPLETED
-    iteration_completed = Events.ITERATION_COMPLETED(every=log_interval)
-
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
     train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir)
     num_classes = len(train_dataloader.dataset.classes)
@@ -63,7 +59,7 @@ def main(args):
     evaluator = create_supervised_evaluator(model, metrics, device=args.device, non_blocking=True, output_transform=evaluator_transform)
 
     # Compute evaluation metrics at the end of every epoch.
-    @trainer.on(epoch_completed)
+    @trainer.on(Events.EPOCH_COMPLETED)
     def compute_metrics(engine: Engine):
         # Development mode overrides.
         max_epochs_ = max_epochs if args.dev_mode else None
@@ -74,7 +70,7 @@ def main(args):
     trainer.logger = setup_logger("trainer")
     evaluator.logger = setup_logger("evaluator")
 
-    @trainer.on(iteration_completed)
+    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
     def log_training_metrics(engine: Engine):
         engine.logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.4f} Accuracy: {:.4f}".format(
             engine.state.epoch,
@@ -84,46 +80,7 @@ def main(args):
             engine.state.metrics["accuracy"],
         ))
 
-    # Configure W&B logging.
-    wandb_logger = WandBLogger(dir=str(args.output_dir))
-    wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
-
-    def step_transform(*args):
-        return trainer.state.iteration
-
-    @trainer.on(iteration_completed)
-    def log_training_epoch(engine: Engine):
-        wandb_logger.log({"epoch": engine.state.epoch}, step=step_transform())
-
-    wandb_logger.attach_opt_params_handler(
-        trainer,
-        event_name=iteration_completed,
-        optimizer=optimizer,
-    )
-
-    wandb_logger.attach_output_handler(
-        trainer,
-        event_name=iteration_completed,
-        tag="training",
-        metric_names="all",
-        global_step_transform=step_transform,
-    )
-
-    wandb_logger.attach_output_handler(
-        trainer,
-        event_name=epoch_completed,
-        tag="training",
-        metric_names="all",
-        global_step_transform=step_transform,
-    )
-
-    wandb_logger.attach_output_handler(
-        evaluator,
-        event_name=epoch_completed,
-        tag="validation",
-        metric_names="all",
-        global_step_transform=step_transform,
-    )
+    configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log_interval, args)
 
     # TODO(thomasjo): Save model weights; use ModelCheckpoint perhaps?
     # def score_function(engine):
@@ -131,6 +88,48 @@ def main(args):
 
     # Kick-off model training...
     trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+
+
+def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log_interval, args):
+    wandb_logger = WandBLogger(dir=str(args.output_dir))
+    wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
+
+    def step_transform(*args):
+        return trainer.state.iteration
+
+    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
+    def log_training_epoch(engine: Engine):
+        wandb_logger.log({"epoch": engine.state.epoch}, step=step_transform())
+
+    wandb_logger.attach_opt_params_handler(
+        trainer,
+        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        optimizer=optimizer,
+    )
+
+    wandb_logger.attach_output_handler(
+        trainer,
+        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        tag="training",
+        metric_names="all",
+        global_step_transform=step_transform,
+    )
+
+    wandb_logger.attach_output_handler(
+        trainer,
+        event_name=Events.EPOCH_COMPLETED,
+        tag="training",
+        metric_names="all",
+        global_step_transform=step_transform,
+    )
+
+    wandb_logger.attach_output_handler(
+        evaluator,
+        event_name=Events.EPOCH_COMPLETED,
+        tag="validation",
+        metric_names="all",
+        global_step_transform=step_transform,
+    )
 
 
 def prepare_dataloaders(data_dir, batch_size=32):
