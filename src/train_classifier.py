@@ -32,7 +32,7 @@ def main(args):
     epoch_length = 2 if args.dev_mode else None
 
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
-    train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir, batch_size=64, num_workers=args.num_workers)
+    train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir, num_workers=args.num_workers)
     num_classes = len(train_dataloader.dataset.classes)
 
     model = initialize_classifier(num_classes)
