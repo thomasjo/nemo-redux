@@ -32,7 +32,7 @@ def main(args):
     epoch_length = 2 if args.dev_mode else None
 
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
-    train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir)
+    train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir, batch_size=64, num_workers=args.num_workers)
     num_classes = len(train_dataloader.dataset.classes)
 
     model = initialize_classifier(num_classes)
@@ -99,16 +99,16 @@ def main(args):
     trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
 
 
-def prepare_dataloaders(data_dir, batch_size=32):
-    train_dataset, val_dataset, test_dataset = prepare_datasets(args.data_dir)
+def prepare_dataloaders(data_dir, batch_size=32, num_workers=None):
+    train_dataset, val_dataset, test_dataset = prepare_datasets(data_dir)
 
     sampling_factor = 4  # Oversample to get more random augmentations
     num_training_samples = sampling_factor * len(train_dataset)
     train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=num_workers, pin_memory=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     return train_dataloader, val_dataloader, test_dataloader
 
@@ -205,5 +205,5 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    args_ = parse_args()
+    main(args_)
