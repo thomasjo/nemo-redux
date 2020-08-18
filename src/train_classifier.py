@@ -38,6 +38,11 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
     criterion = nn.NLLLoss()
 
+    metrics = metrics = {
+        "loss": Loss(criterion, output_transform=metric_transform),
+        "accuracy": Accuracy(output_transform=metric_transform),
+    }
+
     trainer = create_supervised_trainer(
         model,
         optimizer,
@@ -46,11 +51,6 @@ def main(args):
         non_blocking=True,
         output_transform=trainer_transform,
     )
-
-    metrics = metrics = {
-        "loss": Loss(criterion, output_transform=metric_transform),
-        "accuracy": Accuracy(output_transform=metric_transform),
-    }
 
     # Compute metrics during training.
     for name, metric in metrics.items():
