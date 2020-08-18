@@ -94,12 +94,12 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
     wandb_logger = WandBLogger(dir=str(args.output_dir))
     wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
 
-    def step_transform(*args):
+    def trainer_step(*args):
         return trainer.state.iteration
 
     @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
     def log_training_epoch(engine: Engine):
-        wandb_logger.log({"epoch": engine.state.epoch}, step=step_transform())
+        wandb_logger.log({"epoch": engine.state.epoch}, step=trainer_step())
 
     wandb_logger.attach_opt_params_handler(
         trainer,
@@ -107,28 +107,27 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
         optimizer=optimizer,
     )
 
-    wandb_logger.attach_output_handler(
-        trainer,
-        event_name=Events.ITERATION_COMPLETED(every=log_interval),
-        tag="training",
-        metric_names="all",
-        global_step_transform=step_transform,
-    )
+    # Workaround for WandbLogger not supporting EventsList.
+    trainer_events = [
+        Events.ITERATION_COMPLETED(every=log_interval),
+        Events.EPOCH_COMPLETED,
+    ]
 
-    wandb_logger.attach_output_handler(
-        trainer,
-        event_name=Events.EPOCH_COMPLETED,
-        tag="training",
-        metric_names="all",
-        global_step_transform=step_transform,
-    )
+    for event in trainer_events:
+        wandb_logger.attach_output_handler(
+            trainer,
+            event_name=event,
+            tag="training",
+            metric_names="all",
+            global_step_transform=trainer_step,
+        )
 
     wandb_logger.attach_output_handler(
         evaluator,
         event_name=Events.EPOCH_COMPLETED,
         tag="validation",
         metric_names="all",
-        global_step_transform=step_transform,
+        global_step_transform=trainer_step,
     )
 
 
