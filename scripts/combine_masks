@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# This script is used for combining individual object mask/segmentation datasets.
+# Currently the script only works for VIA formatted JSON datasets. However, in
+# the future it might be expanded to support COCO formatted JSON datasets.
+
+python src/nemo/preprocessing/combine_masks.py \
+  --source-file output/2020-07/agglutinated/dataset.json \
+  --source-file output/2020-07/benthic/dataset.json \
+  --source-file output/2020-07/planktic/dataset.json \
+  --source-file output/2020-07/sediment/dataset.json \
+  --output-file output/2020-07/combined-dataset.json

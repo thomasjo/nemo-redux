@@ -2,9 +2,12 @@
 
 set -eu
 
-# This script is used to extract image patches that are used to construct an
-# object classification dataset. The resulting patches need to be manually
-# curated to remove potential false positives.
+# This script is used to extract object masks that are used to construct an
+# object segmentation dataset. The resulting masks need to be manually tuned.
+#
+# Most parameters are tuned in such a way as to give more false positives than
+# false negatives. The rationale is that is easier to remove incorrect masks
+# than it is manually create missing masks.
 
 function contains() {
   local array="$1[@]"
@@ -34,33 +37,33 @@ if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
   # mean: 3687
 
   # Agglutinated
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/agglutinated \
-    --output-dir output/patches/2019-06/agglutinated \
+    --output-dir output/objects/2019-06/agglutinated \
     --corner-margin 400 \
     --object-blur 31 \
     --debug
 
   # Benthic
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/benthic \
-    --output-dir output/patches/2019-06/benthic \
+    --output-dir output/objects/2019-06/benthic \
     --corner-margin 400 \
     --object-blur 31 \
     --debug
 
   # Planktic
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/planktic \
-    --output-dir output/patches/2019-06/planktic \
+    --output-dir output/objects/2019-06/planktic \
     --corner-margin 400 \
     --object-blur 31 \
     --debug
 
   # Sediment
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2019-06/sediment \
-    --output-dir output/patches/2019-06/sediment \
+    --output-dir output/objects/2019-06/sediment \
     --corner-margin 400 \
     --object-blur 31 \
     --debug
@@ -74,18 +77,18 @@ if contains allowlist "2020-05"; then
   # mean: 3645
 
   # Benthic
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-05/benthic \
-    --output-dir output/patches/2020-05/benthic \
+    --output-dir output/objects/2020-05/benthic \
     --border-blur 0 \
     --corner-margin 500 \
     --object-threshold 90 \
     --debug
 
   # Planktic
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-05/planktic \
-    --output-dir output/patches/2020-05/planktic \
+    --output-dir output/objects/2020-05/planktic \
     --border-blur 0 \
     --corner-margin 500 \
     --object-threshold 90 \
@@ -104,54 +107,50 @@ if contains allowlist "2020-07"; then
   # patch size: 256 * scale ≃ 622
 
   # Agglutinated
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/agglutinated \
-    --output-dir output/patches/2020-07/agglutinated \
-    --patch-size 622 \
-    --min-pixel-count 2488 \
+    --output-dir output/objects/2020-07/agglutinated \
+    --min-pixel-count 2048 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
-    --object-blur 75 \
-    --object-threshold 80 \
+    --object-blur 27 \
+    --object-threshold 60 \
     --debug
 
   # Benthic
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/benthic \
-    --output-dir output/patches/2020-07/benthic \
-    --patch-size 622 \
-    --min-pixel-count 2488 \
+    --output-dir output/objects/2020-07/benthic \
+    --min-pixel-count 2048 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
-    --object-blur 75 \
-    --object-threshold 80 \
+    --object-blur 27 \
+    --object-threshold 65 \
     --debug
 
   # Planktic
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/planktic \
-    --output-dir output/patches/2020-07/planktic \
-    --patch-size 622 \
-    --min-pixel-count 2488 \
+    --output-dir output/objects/2020-07/planktic \
+    --min-pixel-count 2048 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
-    --object-blur 75 \
-    --object-threshold 85 \
+    --object-blur 27 \
+    --object-threshold 70 \
     --debug
 
   # Sediment
-  python src/preprocessing/extract_patches.py \
+  python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/sediment \
-    --output-dir output/patches/2020-07/sediment \
-    --patch-size 622 \
-    --min-pixel-count 2488 \
+    --output-dir output/objects/2020-07/sediment \
+    --min-pixel-count 2048 \
     --border-blur 0 \
     --corner-margin 1000 \
     --edge-margin 296 \
-    --object-blur 75 \
-    --object-threshold 70 \
+    --object-blur 27 \
+    --object-threshold 60 \
     --debug
 fi
