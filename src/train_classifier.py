@@ -139,17 +139,17 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
     if args.dev_mode:
         os.environ["WANDB_MODE"] = "dryrun"
 
-    wandb_logger = WandBLogger(dir=str(args.output_dir))
-    wandb_logger.watch(model, criterion, log="all", log_freq=log_interval)
+    wandb = WandBLogger(dir=str(args.output_dir))
+    wandb.watch(model, criterion, log="all", log_freq=log_interval)
 
     def trainer_step(*args):
         return trainer.state.iteration
 
     @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
     def log_training_epoch(engine: Engine):
-        wandb_logger.log({"epoch": engine.state.epoch}, step=trainer_step())
+        wandb.log({"epoch": engine.state.epoch}, step=trainer_step())
 
-    wandb_logger.attach_opt_params_handler(
+    wandb.attach_opt_params_handler(
         trainer,
         event_name=Events.ITERATION_COMPLETED(every=log_interval),
         optimizer=optimizer,
@@ -162,7 +162,7 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
     ]
 
     for event in trainer_events:
-        wandb_logger.attach_output_handler(
+        wandb.attach_output_handler(
             trainer,
             event_name=event,
             tag="training",
@@ -170,7 +170,7 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
             global_step_transform=trainer_step,
         )
 
-    wandb_logger.attach_output_handler(
+    wandb.attach_output_handler(
         evaluator,
         event_name=Events.EPOCH_COMPLETED,
         tag="validation",
