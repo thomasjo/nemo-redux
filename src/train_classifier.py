@@ -117,15 +117,22 @@ def configure_checkpoint_saving(trainer, evaluator, model, optimizer, args):
     to_save = {"model": model, "optimizer": optimizer}
     save_handler = DiskSaver(str(args.output_dir), create_dir=False, require_empty=False)
 
-    checkpoint_handler = Checkpoint(
+    # Configure epoch checkpoints.
+    interval = 1 if args.dev_mode else min(5, args.max_epochs)
+    checkpoint = Checkpoint(to_save, save_handler, n_saved=None, global_step_transform=lambda *_: trainer.state.epoch)
+    trainer.add_event_handler(Events.EPOCH_COMPLETED(every=interval), checkpoint, evaluator)
+
+    # Configure "best score" checkpoints.
+    metric_name = "accuracy"
+    best_checkpoint = Checkpoint(
         to_save,
         save_handler,
-        score_function=lambda engine: engine.state.metrics["accuracy"],
-        score_name="accuracy",
-        n_saved=2,
+        score_name=metric_name,
+        score_function=lambda engine: engine.state.metrics[metric_name],
+        filename_prefix="best",
     )
 
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint_handler, evaluator)
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, best_checkpoint, evaluator)
 
 
 def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log_interval, args):
