@@ -12,7 +12,7 @@ from ignite.engine import Engine, Events, create_supervised_evaluator, create_su
 from ignite.handlers import Checkpoint, DiskSaver
 from ignite.metrics import Accuracy, Loss, RunningAverage
 from ignite.utils import setup_logger
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader
 
 from nemo.datasets import prepare_datasets
 from nemo.models import initialize_classifier
@@ -102,11 +102,11 @@ def main(args):
 def prepare_dataloaders(data_dir, batch_size=32, num_workers=None):
     train_dataset, val_dataset, test_dataset = prepare_datasets(data_dir)
 
-    sampling_factor = 4  # Oversample to get more random augmentations
-    num_training_samples = sampling_factor * len(train_dataset)
-    train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
+    # sampling_factor = 4  # Oversample to get more random augmentations
+    # num_training_samples = sampling_factor * len(train_dataset)
+    # train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=num_workers, pin_memory=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
