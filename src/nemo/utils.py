@@ -15,7 +15,7 @@ def ensure_reproducibility(*, seed):
     torch.random.manual_seed(seed)
 
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.benchmark = False  # NOTE(thomasjo): Significant performance impact.
         torch.backends.cudnn.deterministic = True
 
 
