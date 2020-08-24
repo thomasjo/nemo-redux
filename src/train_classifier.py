@@ -140,34 +140,39 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
         os.environ["WANDB_MODE"] = "dryrun"
 
     wandb = WandBLogger(dir=str(args.output_dir))
+
+    # Log iteration epochs to simplify epoch associations.
+    @trainer.on(Events.ITERATION_STARTED(every=log_interval))
+    def log_training_epoch(engine: Engine):
+        wandb.log({"epoch": engine.state.epoch}, step=trainer.state.iteration)
+
+    # Log model parameters and gradients.
     wandb.watch(model, criterion, log="all", log_freq=log_interval)
 
-    def trainer_step(*args):
-        return trainer.state.iteration
-
-    @trainer.on(Events.ITERATION_COMPLETED(every=log_interval))
-    def log_training_epoch(engine: Engine):
-        wandb.log({"epoch": engine.state.epoch}, step=trainer_step())
-
+    # Log optimizer parameters (e.g. learning rate).
     wandb.attach_opt_params_handler(
         trainer,
-        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        event_name=Events.EPOCH_STARTED,
         optimizer=optimizer,
     )
 
-    # Workaround for WandbLogger not supporting EventsList.
-    trainer_events = [
-        Events.ITERATION_COMPLETED(every=log_interval),
-        Events.EPOCH_COMPLETED,
-    ]
+    # Log iteration/batch loss during training phase.
+    wandb.attach_output_handler(
+        trainer,
+        event_name=Events.ITERATION_COMPLETED(every=log_interval),
+        tag="training",
+        output_transform=lambda output: {"batchloss": output["loss"]},
+        global_step_transform=lambda *_: trainer.state.iteration,
+    )
 
-    for event in trainer_events:
+    # Log all epoch metrics for both the training and validation phase.
+    for tag, engine in [("training", trainer), ("validation", evaluator)]:
         wandb.attach_output_handler(
-            trainer,
-            event_name=event,
-            tag="training",
+            engine,
+            event_name=Events.EPOCH_COMPLETED,
+            tag=tag,
             metric_names="all",
-            global_step_transform=trainer_step,
+            global_step_transform=lambda *_: trainer.state.iteration,
         )
 
     wandb.attach_output_handler(
