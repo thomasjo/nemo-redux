@@ -1,8 +1,10 @@
 import os
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -75,7 +77,6 @@ def main(args):
         epoch_length_ = epoch_length if args.dev_mode else None
         evaluator.run(val_dataloader, max_epochs=max_epochs_, epoch_length=epoch_length_)
 
-    # Configure basic logging.
     trainer.logger = setup_logger("trainer")
     evaluator.logger = setup_logger("evaluator")
 
@@ -89,22 +90,13 @@ def main(args):
             engine.state.metrics["accuracy"],
         ))
 
-    # Log training metrics, etc. to Weights & Biases.
     configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log_interval, args)
-
-    # Setup model checkpointing.
     configure_checkpoint_saving(trainer, evaluator, model, optimizer, args)
-
-    # Kick-off model training...
     trainer.run(train_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
 
 
 def prepare_dataloaders(data_dir, batch_size=32, num_workers=None):
     train_dataset, val_dataset, test_dataset = prepare_datasets(data_dir)
-
-    # sampling_factor = 4  # Oversample to get more random augmentations
-    # num_training_samples = sampling_factor * len(train_dataset)
-    # train_sampler = RandomSampler(train_dataset, replacement=True, num_samples=num_training_samples)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
@@ -131,7 +123,6 @@ def configure_checkpoint_saving(trainer, evaluator, model, optimizer, args):
         score_function=lambda engine: engine.state.metrics[metric_name],
         filename_prefix="best",
     )
-
     trainer.add_event_handler(Events.EPOCH_COMPLETED, best_checkpoint, evaluator)
 
 
@@ -141,22 +132,9 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
 
     wandb = WandBLogger(dir=str(args.output_dir))
 
-    # Log iteration epochs to simplify epoch associations.
-    @trainer.on(Events.ITERATION_STARTED(every=log_interval))
-    def log_training_epoch(engine: Engine):
-        wandb.log({"epoch": engine.state.epoch}, step=trainer.state.iteration)
-
-    # Log model parameters and gradients.
     wandb.watch(model, criterion, log="all", log_freq=log_interval)
+    wandb.attach_opt_params_handler(trainer, event_name=Events.EPOCH_STARTED, optimizer=optimizer)
 
-    # Log optimizer parameters (e.g. learning rate).
-    wandb.attach_opt_params_handler(
-        trainer,
-        event_name=Events.EPOCH_STARTED,
-        optimizer=optimizer,
-    )
-
-    # Log iteration/batch loss during training phase.
     wandb.attach_output_handler(
         trainer,
         event_name=Events.ITERATION_COMPLETED(every=log_interval),
@@ -165,7 +143,6 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
         global_step_transform=lambda *_: trainer.state.iteration,
     )
 
-    # Log all epoch metrics for both the training and validation phase.
     for tag, engine in [("training", trainer), ("validation", evaluator)]:
         wandb.attach_output_handler(
             engine,
@@ -175,13 +152,11 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
             global_step_transform=lambda *_: trainer.state.iteration,
         )
 
-    wandb.attach_output_handler(
-        evaluator,
-        event_name=Events.EPOCH_COMPLETED,
-        tag="validation",
-        metric_names="all",
-        global_step_transform=trainer_step,
-    )
+    trainer.add_event_handler(Events.ITERATION_STARTED(every=log_interval), log_epoch, wandb)
+
+
+def log_epoch(engine: Engine, wandb: WandBLogger):
+    wandb.log({"epoch": engine.state.epoch}, step=engine.state.iteration)
 
 
 def trainer_transform(x, y, y_pred, loss):
