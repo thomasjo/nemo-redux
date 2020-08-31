@@ -57,6 +57,15 @@ def main(args):
         output_transform=trainer_transform,
     )
 
+    # Embed dataset moments into trainer state.
+    # TODO(thomasjo): Embed into dataloader (or something equivalent).
+    trainer.state.moments = {"mean": [0.232, 0.244, 0.269], "std": [0.181, 0.182, 0.190]}
+
+    # Embed class metadata into trainer state.
+    trainer.state.classes = train_dataloader.dataset.classes
+    trainer.state.class_to_idx = train_dataloader.dataset.class_to_idx
+    trainer.state.idx_to_class = {v: k for k, v in train_dataloader.dataset.class_to_idx.items()}
+
     # Compute metrics during training.
     for name, metric in metrics.items():
         RunningAverage(metric).attach(trainer, name)
@@ -153,10 +162,54 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
         )
 
     trainer.add_event_handler(Events.ITERATION_STARTED(every=log_interval), log_epoch, wandb)
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, log_examples, wandb, "training", args)
 
 
 def log_epoch(engine: Engine, wandb: WandBLogger):
     wandb.log({"epoch": engine.state.epoch}, step=engine.state.iteration)
+
+
+def log_examples(engine: Engine, wandb: WandBLogger, tag: str, args: Namespace):
+    x = engine.state.output["x"].detach().cpu().numpy()
+    y = engine.state.output["y"].detach().cpu().numpy()
+    y_pred = engine.state.output["y_pred"].detach().cpu().numpy()
+
+    # Predictions are log scale (torch.log_softmax).
+    y_pred = np.exp(y_pred)
+
+    class_to_idx = engine.state.class_to_idx
+    idx_to_class = {v: k for k, v in class_to_idx.items()}
+
+    # Prepare images for plotting.
+    x = x.transpose(0, 2, 3, 1)  # NCHW -> NHWC
+    x = x * engine.state.moments["std"] + engine.state.moments["mean"]  # Denormalize using dataset moments
+    x = x.clip(0, 1)
+
+    fig = make_image_grid(x, y, y_pred, idx_to_class)
+
+    wandb.log({f"{tag}/examples": fig}, step=engine.state.iteration)
+
+
+def make_image_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_class: dict):
+    max_images = max(32, x.shape[0])
+    num_cols = min(8, max_images)
+    num_rows = max_images // num_cols
+    fig, axs = plt.subplots(num_rows, num_cols, dpi=600, tight_layout=True)
+
+    for ax, image, label, scores in zip(axs.flat, x, y, y_pred):
+        prediction = np.argmax(scores)
+        is_correct = prediction == label
+
+        text = "{} {:.4f} ({})".format(idx_to_class[prediction], scores[prediction], idx_to_class[label])
+        font_args = {"fontsize": 2.5, "color": "b" if is_correct else "r"}
+
+        ax.imshow(image)
+        ax.axis("off")
+        ax.set_title(text, **font_args)
+
+    fig.tight_layout(pad=0)
+
+    return fig
 
 
 def trainer_transform(x, y, y_pred, loss):
