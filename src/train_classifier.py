@@ -1,6 +1,7 @@
-import os
+import os  # noqa
 
 from argparse import ArgumentParser, Namespace
+from math import ceil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -14,6 +15,7 @@ from ignite.engine import Engine, Events, create_supervised_evaluator, create_su
 from ignite.handlers import Checkpoint, DiskSaver
 from ignite.metrics import Accuracy, Loss, RunningAverage
 from ignite.utils import setup_logger
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from torch.utils.data import DataLoader
 
 from nemo.datasets import prepare_datasets
@@ -140,9 +142,7 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
         os.environ["WANDB_MODE"] = "dryrun"
 
     wandb = WandBLogger(dir=str(args.output_dir))
-
     wandb.watch(model, criterion, log="all", log_freq=log_interval)
-    wandb.attach_opt_params_handler(trainer, event_name=Events.EPOCH_STARTED, optimizer=optimizer)
 
     wandb.attach_output_handler(
         trainer,
@@ -166,7 +166,7 @@ def configure_wandb_logging(trainer, evaluator, model, criterion, optimizer, log
 
 
 def log_epoch(engine: Engine, wandb: WandBLogger):
-    wandb.log({"epoch": engine.state.epoch}, step=engine.state.iteration)
+    wandb.log({"epoch": engine.state.epoch}, step=engine.state.iteration, commit=False)
 
 
 def log_examples(engine: Engine, wandb: WandBLogger, tag: str, args: Namespace):
@@ -185,16 +185,16 @@ def log_examples(engine: Engine, wandb: WandBLogger, tag: str, args: Namespace):
     x = x * engine.state.moments["std"] + engine.state.moments["mean"]  # Denormalize using dataset moments
     x = x.clip(0, 1)
 
-    fig = make_image_grid(x, y, y_pred, idx_to_class)
-
-    wandb.log({f"{tag}/examples": fig}, step=engine.state.iteration)
+    image = make_image_grid(x, y, y_pred, idx_to_class)
+    wandb.log({f"{tag}/examples": wandb.Image(image)}, step=engine.state.iteration)
+    plt.imsave(args.output_dir / f"{tag}_examples-{engine.state.iteration}.png", image)
 
 
 def make_image_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_class: dict):
-    max_images = max(32, x.shape[0])
+    max_images = min(32, x.shape[0])
     num_cols = min(8, max_images)
-    num_rows = max_images // num_cols
-    fig, axs = plt.subplots(num_rows, num_cols, dpi=600, tight_layout=True)
+    num_rows = max(1, ceil(max_images / num_cols))
+    fig, axs = plt.subplots(num_rows, num_cols, dpi=300, constrained_layout=True, subplot_kw={"visible": False})
 
     for ax, image, label, scores in zip(axs.flat, x, y, y_pred):
         prediction = np.argmax(scores)
@@ -203,13 +203,16 @@ def make_image_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_cla
         text = "{} {:.4f} ({})".format(idx_to_class[prediction], scores[prediction], idx_to_class[label])
         font_args = {"fontsize": 2.5, "color": "b" if is_correct else "r"}
 
-        ax.imshow(image)
+        ax.set_visible(True)
         ax.axis("off")
         ax.set_title(text, **font_args)
+        ax.imshow(image)
 
-    fig.tight_layout(pad=0)
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    fig_image = np.array(canvas.buffer_rgba())
 
-    return fig
+    return fig_image
 
 
 def trainer_transform(x, y, y_pred, loss):
