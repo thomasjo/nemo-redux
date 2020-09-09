@@ -13,12 +13,12 @@ class Classifier(nn.Module):
 
         self.classifier = nn.Sequential(
             # fc1
-            nn.Linear(num_features, 512),
+            nn.Linear(num_features, 512, bias=False),
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.2),
             # fc2
-            nn.Linear(512, 32),
+            nn.Linear(512, 32, bias=False),
             nn.BatchNorm1d(32),
             nn.ReLU(inplace=True),
             nn.Dropout(0.2),
