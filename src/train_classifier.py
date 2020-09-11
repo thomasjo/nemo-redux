@@ -157,8 +157,8 @@ def configure_checkpoint_saving(trainer, evaluator, model, optimizer, args):
 def configure_example_predictions(trainer: Engine, train_dataloader, val_dataloader, model, args):
     example_batch_size = 64
     with random_state_protection():
-        train_examples = grab_batch(train_dataloader, example_batch_size, args)
-        val_examples = grab_batch(val_dataloader, example_batch_size, args)
+        train_examples = grab_shuffled_data(train_dataloader, example_batch_size, args)
+        val_examples = grab_shuffled_data(val_dataloader, example_batch_size, args)
 
     @trainer.on(Events.EPOCH_STARTED)
     def store_examples(engine: Engine):
@@ -264,7 +264,7 @@ def render_figure(fig: plt.Figure):
     return image
 
 
-def grab_batch(dataloader: DataLoader, batch_size: int, args: Namespace):
+def grab_shuffled_data(dataloader: DataLoader, batch_size: int, args: Namespace):
     dataloader = DataLoader(dataloader.dataset, batch_size=64, shuffle=True, num_workers=args.num_workers)
     batch = next(iter(dataloader))
 
