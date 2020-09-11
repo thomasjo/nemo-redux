@@ -29,6 +29,7 @@ class CustomEvents(EventEnum):
 
 
 def main(args):
+    # TODO(thomasjo): Make this be configurable.
     ensure_reproducibility(seed=42)
 
     # Append timestamp to output directory.
