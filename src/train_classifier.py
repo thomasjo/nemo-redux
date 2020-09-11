@@ -24,7 +24,6 @@ from nemo.utils import ensure_reproducibility, random_state_protection, timestam
 
 
 class CustomEvents(EventEnum):
-    TRAINING_EPOCH_COMPLETED = "training_epoch_completed"
     EXAMPLE_DATA_READY = "example_data_ready"
     EXAMPLE_PREDICTIONS_READY = "example_predictions_ready"
 
@@ -69,7 +68,6 @@ def main(args):
         max_epochs = args.max_epochs if args.dev_mode else None
         epoch_length = args.epoch_length if args.dev_mode else None
         evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
-        engine.fire_event(CustomEvents.TRAINING_EPOCH_COMPLETED)
 
     @trainer.on(Events.COMPLETED)
     def compute_test_metrics(engine: Engine):
