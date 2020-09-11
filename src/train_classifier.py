@@ -1,6 +1,6 @@
 import os  # noqa
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from math import ceil
 from pathlib import Path
 
@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from ignite.contrib.handlers import WandBLogger
-from ignite.engine import Engine, Events, create_supervised_evaluator, create_supervised_trainer
+from ignite.engine import Engine, EventEnum, Events, create_supervised_evaluator, create_supervised_trainer
 from ignite.handlers import Checkpoint, DiskSaver
 from ignite.metrics import Accuracy, Loss, RunningAverage
 from ignite.utils import setup_logger
@@ -20,7 +20,13 @@ from torch.utils.data import DataLoader
 
 from nemo.datasets import prepare_datasets
 from nemo.models import initialize_classifier
-from nemo.utils import ensure_reproducibility, timestamp_path, random_state_protection
+from nemo.utils import ensure_reproducibility, random_state_protection, timestamp_path
+
+
+class CustomEvents(EventEnum):
+    TRAINING_EPOCH_COMPLETED = "training_epoch_completed"
+    EXAMPLE_DATA_READY = "example_data_ready"
+    EXAMPLE_PREDICTIONS_READY = "example_predictions_ready"
 
 
 def main(args):
@@ -54,25 +60,16 @@ def main(args):
     evaluator = create_evaluator(model, metrics, args)
     test_evaluator = create_evaluator(model, metrics, args, name="test_evaluator")
 
-    @trainer.on(Events.STARTED)
-    def setup_example_batches(engine: Engine):
-        with random_state_protection():
-            for engine, dataloader in [(trainer, train_dataloader), (evaluator, val_dataloader)]:
-                # Create temporary dataloader, and store an example batch.
-                dataloader = DataLoader(batch_size=64, shuffle=True, dataset=dataloader.dataset)
-                engine.example_batch = next(iter(dataloader))
+    # Register custom events.
+    trainer.register_events(*CustomEvents)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def compute_validation_metrics(engine: Engine):
         # Development mode overrides.
         max_epochs = args.max_epochs if args.dev_mode else None
         epoch_length = args.epoch_length if args.dev_mode else None
-
-        evaluator.run(
-            val_dataloader,
-            max_epochs=max_epochs,
-            epoch_length=epoch_length,
-        )
+        evaluator.run(val_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+        engine.fire_event(CustomEvents.TRAINING_EPOCH_COMPLETED)
 
     @trainer.on(Events.COMPLETED)
     def compute_test_metrics(engine: Engine):
@@ -88,8 +85,9 @@ def main(args):
             engine.state.metrics["accuracy"],
         ))
 
-    configure_wandb_logging(trainer, evaluator, test_evaluator, model, criterion, optimizer, args)
     configure_checkpoint_saving(trainer, evaluator, model, optimizer, args)
+    configure_example_predictions(trainer, train_dataloader, val_dataloader, model, args)
+    configure_wandb_logging(trainer, evaluator, test_evaluator, model, criterion, optimizer, args)
 
     # Kick off the whole model training shebang...
     trainer.run(train_dataloader, max_epochs=args.max_epochs, epoch_length=args.epoch_length)
@@ -158,6 +156,31 @@ def configure_checkpoint_saving(trainer, evaluator, model, optimizer, args):
     trainer.add_event_handler(Events.EPOCH_COMPLETED, best_checkpoint, evaluator)
 
 
+def configure_example_predictions(trainer: Engine, train_dataloader, val_dataloader, model, args):
+    example_batch_size = 64
+    with random_state_protection():
+        train_examples = grab_batch(train_dataloader, example_batch_size, args)
+        val_examples = grab_batch(val_dataloader, example_batch_size, args)
+
+    @trainer.on(Events.EPOCH_STARTED)
+    def store_examples(engine: Engine):
+        engine.state.examples = {"training": train_examples, "validation": val_examples}
+        engine.logger.info("Example data ready")
+        engine.fire_event(CustomEvents.EXAMPLE_DATA_READY)
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def predict_on_examples(engine: Engine):
+        model.eval()
+        for tag, batch in engine.state.examples.items():
+            x, y = batch
+            with torch.no_grad():
+                y_pred = model(x.to(args.device, non_blocking=True))
+                y_pred = y_pred.detach().cpu()
+            engine.state.examples[tag] = (x, y, y_pred)
+        engine.logger.info("Example predictions ready")
+        engine.fire_event(CustomEvents.EXAMPLE_PREDICTIONS_READY)
+
+
 def configure_wandb_logging(trainer, evaluator, test_evaluator, model, criterion, optimizer, args):
     if args.dev_mode:
         os.environ["WANDB_MODE"] = "dryrun"
@@ -165,7 +188,7 @@ def configure_wandb_logging(trainer, evaluator, test_evaluator, model, criterion
     wandb_logger = WandBLogger(dir=str(args.output_dir))
     wandb_logger.watch(model, criterion, log="all", log_freq=args.log_interval)
 
-    # Configure basic metric logging, etc.
+    # Log training-specific metrics.
     wandb_logger.attach_output_handler(
         trainer,
         event_name=Events.ITERATION_COMPLETED(every=args.log_interval),
@@ -174,6 +197,7 @@ def configure_wandb_logging(trainer, evaluator, test_evaluator, model, criterion
         global_step_transform=lambda *_: trainer.state.iteration,
     )
 
+    # Configure basic metric logging.
     for tag, engine in [("training", trainer), ("validation", evaluator), ("test", test_evaluator)]:
         wandb_logger.attach_output_handler(
             engine,
@@ -188,42 +212,26 @@ def configure_wandb_logging(trainer, evaluator, test_evaluator, model, criterion
     def log_epoch(engine: Engine):
         wandb_logger.log({"epoch": engine.state.epoch}, step=engine.state.iteration, commit=False)
 
-    # Configure example image and prediction logging.
-    example_evaluator = create_supervised_evaluator(
-        model,
-        device=args.device,
-        non_blocking=True,
-        output_transform=evaluator_transform,
-    )
-
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def evaluate_example_batches(engine: Engine):
-        for tag, engine in [("training", trainer), ("validation", evaluator)]:
-            batch = [engine.example_batch]
-            example_evaluator.tag = tag
-            example_evaluator.run(batch)
-
-    @example_evaluator.on(Events.EPOCH_COMPLETED)
+    @trainer.on(CustomEvents.EXAMPLE_PREDICTIONS_READY)
     def log_example_predictions(engine: Engine):
-        x = engine.state.output["x"].detach().cpu().numpy()
-        y = engine.state.output["y"].detach().cpu().numpy()
-        y_pred = engine.state.output["y_pred"].detach().cpu().numpy()
+        for tag, (x, y, y_pred) in engine.state.examples.items():
+            x, y, y_pred = x.numpy(), y.numpy(), y_pred.numpy()
 
-        # Convert log scale (torch.log_softmax) predictions.
-        y_pred = np.exp(y_pred)
+            # Convert log scale (torch.log_softmax) predictions.
+            y_pred = np.exp(y_pred)
 
-        # Prepare images for plotting.
-        moments = trainer.state.dataloader.dataset.moments
-        x = x.transpose(0, 2, 3, 1)  # NCHW -> NHWC
-        x = x * moments["std"] + moments["mean"]  # Denormalize using dataset moments
-        x = x.clip(0, 1)
+            # Prepare images for plotting.
+            moments = engine.state.dataloader.dataset.moments
+            x = x.transpose(0, 2, 3, 1)  # NCHW -> NHWC
+            x = x * moments["std"] + moments["mean"]  # Denormalize using dataset moments
+            x = x.clip(0, 1)
 
-        # Plot grid of predictions for "example" batch.
-        idx_to_class = {v: k for k, v in trainer.state.dataloader.dataset.class_to_idx.items()}
-        image = prediction_grid(x, y, y_pred, idx_to_class)
+            # Plot grid of predictions for "example" batch.
+            idx_to_class = {v: k for k, v in engine.state.dataloader.dataset.class_to_idx.items()}
+            image = prediction_grid(x, y, y_pred, idx_to_class)
 
-        # Save the prediction grid both to file system and W&B.
-        wandb_logger.log({f"{engine.tag}/examples": wandb_logger.Image(image)}, step=trainer.state.iteration)
+            # Save the prediction grid both to file system and W&B.
+            wandb_logger.log({f"{tag}/examples": wandb_logger.Image(image)}, step=engine.state.iteration)
 
 
 def prediction_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_class: dict):
@@ -235,16 +243,15 @@ def prediction_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_cla
     for ax, image, label, scores in zip(axs.flat, x, y, y_pred):
         ax.set_visible(True)
         ax.axis("off")
-
-        prediction = np.argmax(scores)
-        is_correct = prediction == label
+        ax.imshow(image)
 
         # Encode labels and softmax scores in subplot title.
+        prediction = np.argmax(scores)
         text = "{} {:.4f} ({})".format(idx_to_class[prediction], scores[prediction], idx_to_class[label])
-        font_args = {"fontsize": 2.5, "color": "b" if is_correct else "r"}
-        ax.set_title(text, **font_args)
-
-        ax.imshow(image)
+        ax.set_title(text, {
+            "fontsize": 2.5,
+            "color": "green" if prediction == label else "red",
+        })
 
     fig_image = render_figure(fig)
 
@@ -257,6 +264,13 @@ def render_figure(fig: plt.Figure):
     image = np.array(canvas.buffer_rgba())
 
     return image
+
+
+def grab_batch(dataloader: DataLoader, batch_size: int, args: Namespace):
+    dataloader = DataLoader(dataloader.dataset, batch_size=64, shuffle=True, num_workers=args.num_workers)
+    batch = next(iter(dataloader))
+
+    return batch
 
 
 def trainer_transform(x, y, y_pred, loss):
