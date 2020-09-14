@@ -156,7 +156,7 @@ def configure_checkpoint_saving(trainer, evaluator, model, optimizer, args):
 
 
 def configure_example_predictions(trainer: Engine, train_dataloader, val_dataloader, model, args):
-    example_batch_size = 64
+    example_batch_size = 32
     with random_state_protection():
         train_examples = grab_shuffled_data(train_dataloader, example_batch_size, args)
         val_examples = grab_shuffled_data(val_dataloader, example_batch_size, args)
@@ -233,7 +233,7 @@ def configure_wandb_logging(trainer, evaluator, test_evaluator, model, criterion
 
 
 def prediction_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_class: dict):
-    max_images = min(64, x.shape[0])
+    max_images = min(32, x.shape[0])
     num_cols = min(8, max_images)
     num_rows = max(1, ceil(max_images / num_cols))
     fig, axs = plt.subplots(num_rows, num_cols, dpi=300, constrained_layout=True, subplot_kw={"visible": False})
@@ -265,7 +265,7 @@ def render_figure(fig: plt.Figure):
 
 
 def grab_shuffled_data(dataloader: DataLoader, batch_size: int, args: Namespace):
-    dataloader = DataLoader(dataloader.dataset, batch_size=64, shuffle=True, num_workers=args.num_workers)
+    dataloader = DataLoader(dataloader.dataset, batch_size=batch_size, shuffle=True)
     batch = next(iter(dataloader))
 
     return batch
