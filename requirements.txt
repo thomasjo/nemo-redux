@@ -32,7 +32,7 @@ smmap==3.0.4
 subprocess32==3.5.4
 torch==1.6.0
 torchsummary==1.5.1
-tqdm==4.48.2
+tqdm==4.49.0
 urllib3==1.25.10
 wandb==0.9.7
 watchdog==0.10.3
