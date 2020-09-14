@@ -264,6 +264,7 @@ def prediction_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_cla
         })
 
     fig_image = render_figure(fig)
+    plt.close(fig)
 
     return fig_image
 
