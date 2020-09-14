@@ -236,19 +236,31 @@ def prediction_grid(x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx_to_cla
     max_images = min(32, x.shape[0])
     num_cols = min(8, max_images)
     num_rows = max(1, ceil(max_images / num_cols))
-    fig, axs = plt.subplots(num_rows, num_cols, dpi=300, constrained_layout=True, subplot_kw={"visible": False})
+    fig, axs = plt.subplots(
+        num_rows,
+        num_cols,
+        dpi=300,
+        constrained_layout=True,
+        gridspec_kw={
+            "hspace": 0,
+            "wspace": 0,
+        },
+        subplot_kw={
+            "frame_on": False,
+            "xticks": [],
+            "yticks": [],
+        },
+    )
 
     for ax, image, label, scores in zip(axs.flat, x, y, y_pred):
-        ax.set_visible(True)
-        ax.axis("off")
         ax.imshow(image)
 
         # Encode labels and softmax scores in subplot title.
         prediction = np.argmax(scores)
         text = "{} {:.4f} ({})".format(idx_to_class[prediction], scores[prediction], idx_to_class[label])
         ax.set_title(text, {
-            "fontsize": 2.5,
             "color": "green" if prediction == label else "red",
+            "fontsize": 2.5,
         })
 
     fig_image = render_figure(fig)
