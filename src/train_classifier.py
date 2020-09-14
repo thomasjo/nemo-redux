@@ -172,7 +172,7 @@ def configure_example_predictions(trainer: Engine, train_dataloader, val_dataloa
         model.eval()
         for tag, (x, y) in engine.state.examples.items():
             with torch.no_grad():
-                y_pred = model(x.to(args.device, non_blocking=True))
+                y_pred = model(x.to(device=args.device))
                 y_pred = y_pred.detach().cpu()
             engine.state.examples[tag] = (x, y, y_pred)
         engine.logger.info("Example predictions ready")
