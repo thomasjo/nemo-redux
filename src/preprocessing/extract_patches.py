@@ -233,12 +233,13 @@ def extract_patches(
 
             # Save patch for the main source image frame.
             patch_postfix = f"patch-{i:03d}"
-            save_image(output_file, raw_image[row_crop, col_crop], postfix=patch_postfix)
+            save_image(output_file, raw_image[row_crop, col_crop], patch_postfix)
 
             # Save patches for auxillary image frames used for e.g. alternative exposure settings, etc.
             if aux_images is not None:
                 for idx, aux_image in enumerate(aux_images, start=1):
-                    save_image(output_file, aux_image[row_crop, col_crop], postfix=f"{patch_postfix}--aux-{idx}")
+                    patch_postfix = f"{patch_postfix}--aux-{idx}"
+                    save_image(output_file, aux_image[row_crop, col_crop], patch_postfix)
 
     print()
 
