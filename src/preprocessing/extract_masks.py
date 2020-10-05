@@ -2,7 +2,6 @@ import json
 import shutil
 
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from datetime import datetime
 from pathlib import Path
 from typing import List
 
