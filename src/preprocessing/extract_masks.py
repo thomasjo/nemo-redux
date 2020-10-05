@@ -48,51 +48,6 @@ def to_regions(contours: List[np.ndarray], category_id: str):
     return regions
 
 
-def initialize_dataset(source_dir: Path):
-    dataset = {}
-
-    now = datetime.utcnow()
-    dataset["info"] = {
-        "year": now.year,
-        "version": "2.0.0",
-        "description": "Microscopic foraminifera collected from sediment samples in the Barents Sea region.",
-        "contributor": "UiT The Arctic University of Norway",
-        "url": "https://uitml.github.io/nemo",
-        "date_created": now.strftime('%Y-%m-%dT%H:%M:%S.%f%z'),
-    }
-
-    dataset["licenses"] = [{
-        "id": 1,
-        "name": "CC BY 4.0",
-        "url": "https://creativecommons.org/licenses/by/4.0/",
-    }]
-
-    dataset["categories"] = [
-        {
-            "id": 1,
-            "name": "agglutinated",
-            "supercategory": "foraminifera",
-        },
-        {
-            "id": 2,
-            "name": "benthic",
-            "supercategory": "foraminifera",
-        },
-        {
-            "id": 3,
-            "name": "planktic",
-            "supercategory": "foraminifera",
-        },
-        {
-            "id": 4,
-            "name": "sediment",
-            "supercategory": "sediment",
-        },
-    ]
-
-    return dataset
-
-
 def extract_masks(
     source_dir: Path,
     output_dir: Path,
