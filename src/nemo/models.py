@@ -15,12 +15,12 @@ class Classifier(nn.Module):
             # fc1
             nn.Linear(num_features, 512, bias=False),
             nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.Dropout(0.2),
             # fc2
             nn.Linear(512, 32, bias=False),
             nn.BatchNorm1d(32),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.Dropout(0.2),
             # predictions
             nn.Linear(32, num_classes),
