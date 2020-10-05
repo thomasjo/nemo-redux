@@ -153,6 +153,11 @@ def extract_patches(
     shutil.rmtree(output_dir, ignore_errors=True)
     output_dir.mkdir(parents=True)
 
+    if debug_mode:
+        debug_dir = output_dir / "debug"
+        shutil.rmtree(debug_dir, ignore_errors=True)
+        debug_dir.mkdir(parents=True)
+
     patch_width, patch_height = patch_size, patch_size
 
     print("=" * 72)
@@ -167,6 +172,13 @@ def extract_patches(
         output_file = output_dir / f"{image_file.stem}.png"
         image, aux_images = load_image(image_file)
 
+        # Ensure aux directories exist.
+        if aux_images is not None:
+            aux_dirs = {}
+            for idx, _ in enumerate(aux_images, start=1):
+                aux_dirs[idx] = output_dir / f"aux-{idx}"
+                aux_dirs[idx].mkdir(exist_ok=True)
+
         # Store the "raw" image before contrast scaling, etc.
         raw_image = image.copy()
 
@@ -175,8 +187,9 @@ def extract_patches(
         image = cv.convertScaleAbs(image, alpha=1.4, beta=0)
 
         if debug_mode:
-            save_image(output_file, raw_image, postfix="raw")
-            save_image(output_file, image, postfix="scaled")
+            debug_file = debug_dir / output_file.name
+            save_image(debug_file, raw_image, postfix="raw")
+            save_image(debug_file, image, postfix="scaled")
 
         # Binary mask used for finding objects.
         # TODO: Make blur size configurable?
@@ -195,19 +208,19 @@ def extract_patches(
 
         if debug_mode:
             # Save object mask image.
-            save_image(output_file, image_binary, postfix="binary")
+            save_image(debug_file, image_binary, postfix="binary")
 
             # Create an image with mask overlays. Useful for visual debugging.
             image_seg = image.copy()
             image_seg[image_binary == 255] = OVERLAY_COLOR
             image_overlay = cv.addWeighted(image_seg, OVERLAY_ALPHA, image, 1 - OVERLAY_ALPHA, 0)
-            save_image(output_file, image_overlay, postfix="overlay")
+            save_image(debug_file, image_overlay, postfix="overlay")
 
             # Create an image with bounding boxes. Useful for visual debugging.
             image_bbox = image.copy()
             for i in range(n_objects):
                 image_bbox = add_bbox(stats[i], image_bbox)
-            save_image(output_file, image_bbox, postfix="bbox")
+            save_image(debug_file, image_bbox, postfix="bbox")
 
         for i in range(n_objects):
             # Extract and save image patch from object.
@@ -232,14 +245,15 @@ def extract_patches(
             row_crop = slice(cy - patch_height // 2, cy + patch_height // 2)
 
             # Save patch for the main source image frame.
-            patch_postfix = f"patch-{i:03d}"
+            patch_num = i + 1  # Start numbering from 1
+            patch_postfix = f"patch-{patch_num:03d}"
             save_image(output_file, raw_image[row_crop, col_crop], patch_postfix)
 
             # Save patches for auxillary image frames used for e.g. alternative exposure settings, etc.
             if aux_images is not None:
                 for idx, aux_image in enumerate(aux_images, start=1):
-                    patch_postfix = f"{patch_postfix}--aux-{idx}"
-                    save_image(output_file, aux_image[row_crop, col_crop], patch_postfix)
+                    aux_file = aux_dirs[idx] / output_file.name
+                    save_image(aux_file, aux_image[row_crop, col_crop], patch_postfix)
 
     print()
 
