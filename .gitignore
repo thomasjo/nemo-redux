@@ -5,5 +5,5 @@
 /data
 /output
 
-# PyTorch Lightning nonsense...
-/lightning_logs
+# Random clutter.
+/wandb
