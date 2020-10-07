@@ -1,8 +1,9 @@
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
-from PIL import Image
 
 import numpy as np
+
+from PIL import Image
 
 
 def compute_image_stats(source_dir: Path):
