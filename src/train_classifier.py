@@ -72,7 +72,10 @@ def main(args):
 
     @trainer.on(Events.COMPLETED)
     def compute_test_metrics(engine: Engine):
-        test_evaluator.run(test_dataloader, max_epochs=args.max_epochs, epoch_length=args.epoch_length)
+        # Development mode overrides.
+        max_epochs = args.max_epochs if args.dev_mode else None
+        epoch_length = args.epoch_length if args.dev_mode else None
+        test_evaluator.run(test_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
 
     @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
     def log_training_metrics(engine: Engine):
