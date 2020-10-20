@@ -1,3 +1,7 @@
+from pathlib import Path
+
+import yaml
+
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchvision.datasets import ImageFolder
@@ -7,8 +11,9 @@ from nemo.transforms import RandomDiscreteRotation
 
 
 def prepare_dataloaders(data_dir, batch_size=32, num_workers=None):
-    # TODO(thomasjo): Read moments from file in data_dir or kwargs?
-    moments = {"mean": [0.232, 0.244, 0.269], "std": [0.181, 0.182, 0.190]}  # Dataset moments
+    # TODO(thomasjo): Consider calculating moments on-demand.
+    # Fetch dataset moments from metadata.
+    moments = load_metadata(data_dir)
 
     transform = Compose([
         Resize(256),
@@ -46,3 +51,11 @@ def prepare_dataloaders(data_dir, batch_size=32, num_workers=None):
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
 
     return train_dataloader, val_dataloader, test_dataloader
+
+
+def load_metadata(data_dir: Path):
+    metadata_file = data_dir / "metadata.yaml"
+    with metadata_file.open("r") as fs:
+        metadata = yaml.safe_load(fs)
+
+    return metadata
