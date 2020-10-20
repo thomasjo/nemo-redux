@@ -8,6 +8,9 @@ version = "0.1.0"
 description = ""
 authors = ["Thomas Johansen <thomasjo@gmail.com>"]
 
+# Install current project in "editable" mode.
+packages = [{ include = "nemo", from = "src" }]
+
 [tool.poetry.dev-dependencies]
 flake8 = "^3.8.3"
 flake8-isort = "^4.0.0"
