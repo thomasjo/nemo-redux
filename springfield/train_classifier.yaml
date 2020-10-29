@@ -12,7 +12,9 @@ spec:
         command:
         - python
         - src/train_classifier.py
-        - --data-dir=data/partitions/2019-06
+        # - --data-dir=data/partitions/2019-06
+        # - --data-dir=data/partitions/2020-05
+        - --data-dir=data/partitions/2020-07
         - --output-dir=output
         stdin: true
         tty: true
