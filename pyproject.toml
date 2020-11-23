@@ -12,7 +12,7 @@ authors = ["Thomas Johansen <thomasjo@gmail.com>"]
 packages = [{ include = "nemo", from = "src" }]
 
 [tool.poetry.dev-dependencies]
-flake8 = "^3.8.3"
+flake8 = "^3.8.4"
 flake8-isort = "^4.0.0"
 isort = { version = "^4.3.21", extras = ["pyproject"] }
 rope = "^0.17.0"
@@ -25,17 +25,17 @@ python = "^3.8"
 torch = { version = "^1.6.0", optional = true }
 torchvision = { version = "^0.7.0", optional = true }
 
-matplotlib = "^3.3.1"
-numpy = "^1.19.2"
-opencv-python-headless = "^4.4.0.42"
+matplotlib = "^3.3.3"
+numpy = "^1.19.4"
+opencv-python-headless = "^4.4.0.46"
 pillow = "^7.2.0"
-pytorch-ignite = "^0.4.1"
+pytorch-ignite = "^0.4.2"
 pyyaml = "^5.3.1"
 scikit-learn = "^0.23.2"
-scipy = "^1.5.2"
+scipy = "^1.5.4"
 torchsummary = "^1.5.1"
-tqdm = "^4.47.0"
-wandb = "^0.10.2"
+tqdm = "^4.53.0"
+wandb = "^0.10.11"
 
 [tool.poetry.extras]
 torch = ["torch", "torchvision"]
