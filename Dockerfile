@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:1.6.0-cuda10.1-cudnn7-devel
+FROM pytorch/pytorch:1.7.0-cuda11.0-cudnn8-devel
 
 ADD requirements.txt /tmp
 RUN pip install -r /tmp/requirements.txt
