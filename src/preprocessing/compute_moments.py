@@ -5,7 +5,7 @@ import torch
 
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
-from torchvision.transforms import Compose, ToTensor
+from torchvision.transforms import Compose, Resize, ToTensor
 
 from nemo.utils import ensure_reproducibility
 
@@ -41,7 +41,7 @@ class RunningAverage:
 def main(args):
     ensure_reproducibility(seed=42)
 
-    transform = Compose([ToTensor()])
+    transform = Compose([Resize(256), ToTensor()])
     train_dataset = ImageFolder(args.data_dir / "train", transform=transform)
     train_loader = DataLoader(train_dataset, num_workers=args.num_workers, batch_size=128)
 
