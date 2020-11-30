@@ -5,6 +5,7 @@
 # Project-specific.
 /data
 /output
+/src/scratch
 
 # Random clutter.
 /wandb
