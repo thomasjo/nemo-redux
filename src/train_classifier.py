@@ -18,7 +18,7 @@ from ignite.utils import setup_logger
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from torch.utils.data import DataLoader
 
-from nemo.datasets import prepare_dataloaders
+from nemo.datasets import classification_dataloaders
 from nemo.models import initialize_classifier
 from nemo.utils import ensure_reproducibility, random_state_protection, timestamp_path
 
@@ -42,7 +42,7 @@ def main(args):
     args.epoch_length = 2 if args.dev_mode else None
 
     # TODO(thomasjo): Transition away from pre-partitioned datasets to on-demand partitioning.
-    train_dataloader, val_dataloader, test_dataloader = prepare_dataloaders(args.data_dir, num_workers=args.num_workers)
+    train_dataloader, val_dataloader, test_dataloader = classification_dataloaders(args.data_dir, num_workers=args.num_workers)
     num_classes = len(train_dataloader.dataset.classes)
 
     model = initialize_classifier(num_classes)

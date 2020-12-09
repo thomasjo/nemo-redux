@@ -124,7 +124,7 @@ class ObjectDataset(Dataset):
         return annotations
 
 
-def prepare_dataloaders(data_dir, batch_size=32, num_workers=None):
+def classification_dataloaders(data_dir, batch_size=32, num_workers=None):
     # TODO(thomasjo): Consider calculating moments on-demand.
     # Fetch dataset moments from metadata.
     moments = load_metadata(data_dir)
