@@ -17,9 +17,10 @@ def main(args):
     json_file = args.source_dir / "via.json"
     with json_file.open() as fp:
         annotations = json.load(fp)
+        annotations = list(annotations.values())
 
     entry_labels = []
-    for entry in annotations.values():
+    for entry in annotations:
         max_coords = []
         categories = []
         for region in entry["regions"]:
@@ -40,64 +41,56 @@ def main(args):
 
     indices = np.arange(len(entry_labels))
     train_idx, test_idx = train_test_split(indices, stratify=entry_labels, test_size=0.27)
+    partitions = [("train", train_idx), ("test", test_idx)]
 
-    entry_labels = np.array(entry_labels)
-    _, train_counts = np.unique(entry_labels[train_idx][:, 0], return_counts=True)
-    _, test_counts = np.unique(entry_labels[test_idx][:, 0], return_counts=True)
-    print("train:", np.sum(train_counts), train_counts)
-    print(" test:", np.sum(test_counts), test_counts)
+    # entry_labels = np.array(entry_labels)
+    # _, train_counts = np.unique(entry_labels[train_idx][:, 0], return_counts=True)
+    # _, test_counts = np.unique(entry_labels[test_idx][:, 0], return_counts=True)
+    # print("train:", np.sum(train_counts), train_counts)
+    # print(" test:", np.sum(test_counts), test_counts)
 
     # Safely prepare a fresh output directory.
     if args.output_dir.exists():
-        assert all(map(lambda x: x.is_dir() and x.name in ["train", "test"], args.output_dir.iterdir()))
+        assert all(map(lambda x: x.is_dir() and x.name in partitions.keys(), args.output_dir.iterdir()))
         shutil.rmtree(args.output_dir)
     args.output_dir.mkdir(parents=True)
 
-    train_dir = args.output_dir / "train"
-    train_annotations = {}
-    for num, entry in enumerate([list(annotations.values())[i] for i in train_idx], start=1):
-        old_path = args.source_dir / "images" / entry["filename"]
+    for partition_name, partition_idx in partitions:
+        partition_dir = args.output_dir / partition_name
 
-        new_name = "{:04d}{}".format(num, old_path.suffix)
-        new_path = train_dir / "images" / new_name
-        new_path.parent.mkdir(parents=True, exist_ok=True)
+        old_images_dir = args.source_dir / "images"
+        new_images_dir = partition_dir / "images"
+        new_images_dir.mkdir(parents=True)
 
-        train_annotations["{}{}".format(new_name, entry["size"])] = {
-            "filename": new_name,
-            "size": entry["size"],
-            "regions": entry["regions"],
-            "file_attributes": entry["file_attributes"],
-        }
+        json_payload = {}
+        for num, entry in enumerate([annotations[i] for i in partition_idx], start=1):
+            old_path = old_images_dir / entry["filename"]
 
-        print(f"{old_path=}")
-        print(f"{new_path=}")
-        shutil.copy(old_path, new_path, follow_symlinks=True)
+            new_name = "{:04d}{}".format(num, old_path.suffix)
+            new_path = new_images_dir / new_name
 
-    with (train_dir / "via.json").open("w") as fp:
-        json.dump(train_annotations, fp)
+            json_payload["{}{}".format(new_name, entry["size"])] = {
+                "filename": new_name,
+                "size": entry["size"],
+                "regions": entry["regions"],
+                "file_attributes": entry["file_attributes"],
+            }
 
-    test_dir = args.output_dir / "test"
-    test_annotations = {}
-    for num, entry in enumerate([list(annotations.values())[i] for i in test_idx], start=1):
-        old_path = args.source_dir / "images" / entry["filename"]
+            print(f"{old_path=} -> {new_path=}")
+            shutil.copy(old_path, new_path, follow_symlinks=True)
 
-        new_name = "{:04d}{}".format(num, old_path.suffix)
-        new_path = test_dir / "images" / new_name
-        new_path.parent.mkdir(parents=True, exist_ok=True)
+            # Copy optional aux images.
+            for aux_dir in old_images_dir.glob("aux-*"):
+                aux_file = aux_dir / old_path.name
+                if not aux_file.exists():
+                    break
 
-        test_annotations["{}{}".format(new_name, entry["size"])] = {
-            "filename": new_name,
-            "size": entry["size"],
-            "regions": entry["regions"],
-            "file_attributes": entry["file_attributes"],
-        }
+                new_aux_dir = new_images_dir / aux_dir.name
+                new_aux_dir.mkdir(exist_ok=True)
+                shutil.copy(aux_file, new_aux_dir / new_name, follow_symlinks=True)
 
-        print(f"{old_path=}")
-        print(f"{new_path=}")
-        shutil.copy(old_path, new_path, follow_symlinks=True)
-
-    with (test_dir / "via.json").open("w") as fp:
-        json.dump(test_annotations, fp)
+        with (partition_dir / "via.json").open("w") as fp:
+            json.dump(json_payload, fp)
 
 
 def parse_args():
