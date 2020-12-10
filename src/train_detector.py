@@ -1,9 +1,8 @@
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable
 
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import torchvision as vision
 
@@ -13,11 +12,10 @@ from ignite.utils import setup_logger, convert_tensor
 from torch.utils.data import DataLoader
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-# from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.transforms import Compose, ToTensor
 
 from nemo.datasets import ObjectDataset
-from nemo.utils import ensure_reproducibility, random_state_protection, timestamp_path
+from nemo.utils import ensure_reproducibility, timestamp_path
 
 DEFAULT_DATA_DIR = Path("data/segmentation/combined")
 
@@ -38,7 +36,6 @@ def main(args):
     dataset = ObjectDataset(args.data_dir, transform=Compose([ToTensor()]))
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=collate_fn, num_workers=args.num_workers)
 
-    # model = vision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=5)
     # NOTE: See https://pytorch.org/docs/stable/torchvision/models.html#mask-r-cnn.
     model = vision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
 
