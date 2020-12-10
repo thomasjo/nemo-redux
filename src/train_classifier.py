@@ -46,12 +46,12 @@ def main(args):
     num_classes = len(train_dataloader.dataset.classes)
 
     model = initialize_classifier(num_classes)
-    model.to(device=args.device)
+    model = model.to(device=args.device)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
     criterion = nn.NLLLoss()
 
-    metrics = metrics = {
+    metrics = {
         "loss": Loss(criterion, output_transform=metric_transform),
         "accuracy": Accuracy(output_transform=metric_transform),
     }
