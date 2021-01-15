@@ -28,6 +28,7 @@ allowlist=(
   "2019-06"
   "2020-05"
   "2020-07"
+  "2021-01"
 )
 
 # 2019-06
@@ -146,6 +147,30 @@ if contains allowlist "2020-07"; then
   python src/preprocessing/extract_masks.py \
     --source-dir data/raw/2020-07/sediment \
     --output-dir output/objects/2020-07/sediment \
+    --min-pixel-count 2048 \
+    --border-blur 0 \
+    --corner-margin 1000 \
+    --edge-margin 296 \
+    --object-blur 27 \
+    --object-threshold 60 \
+    --debug
+fi
+
+# 2021-01
+# -------
+if contains allowlist "2021-01"; then
+  # dims: [8745, 9151]
+  # mean: 8948
+  #
+  # scale: (8948 / 3687) ≃ 2.43
+  #
+  # patch size: 224 * scale ≃ 544
+  # patch size: 256 * scale ≃ 622
+
+  # Mixed
+  python src/preprocessing/extract_masks.py \
+    --source-dir data/raw/2021-01/mixed \
+    --output-dir output/objects/2021-01/mixed \
     --min-pixel-count 2048 \
     --border-blur 0 \
     --corner-margin 1000 \
