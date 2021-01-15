@@ -95,7 +95,7 @@ def extract_masks(
         print(image_file)
 
         category_name, *_ = image_file.stem.partition("-")
-        category_id = category_lookup[category_name]
+        category_id = category_lookup.get(category_name, "")
 
         image, aux_images = load_image(image_file)
         image_name = image_file.with_suffix(".png").name
