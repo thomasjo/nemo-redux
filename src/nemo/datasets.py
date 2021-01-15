@@ -35,6 +35,10 @@ class ObjectDataset(Dataset):
         assert all(map(lambda a, b: a.name == b.name, self.image_files, self.mask_files))
         # TODO(thomasjo): Check order of objects in mask images vs. annotation file.
 
+        classes, class_to_idx = self.find_classes(root_dir)
+        self.classes = classes
+        self.class_to_idx = class_to_idx
+
     def __getitem__(self, idx):
         image_file = self.image_files[idx]
         image = Image.open(image_file)
@@ -122,6 +126,17 @@ class ObjectDataset(Dataset):
             annotations[filename] = masks
 
         return annotations
+
+    def find_classes(self, root_dir):
+        json_file = root_dir / "via_attributes.json"
+        with json_file.open() as fp:
+            raw_data = json.load(fp)
+
+        categories = raw_data["region"]["category"]["options"]
+        class_to_idx = {int(k): v for k, v in categories.items()}
+        classes = list(class_to_idx.values())
+
+        return classes, class_to_idx
 
 
 def classification_dataloaders(data_dir, batch_size=32, num_workers=None):
