@@ -37,15 +37,18 @@ def main(args):
     dataset = ObjectDataset(args.data_dir, transform=Compose([ToTensor()]))
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=collate_fn, num_workers=args.num_workers)
 
+    # Number of classes/categories is equal to object classes + "background" class.
+    num_classes = len(dataset.classes) + 1
+
     # NOTE: See https://pytorch.org/docs/stable/torchvision/models.html#mask-r-cnn.
     model = vision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
 
     in_features = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 1 + 4)
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
     hidden_layer = 256
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, 1 + 4)
+    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
 
     model = model.to(device=args.device)
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
