@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Callable
+from warnings import catch_warnings, filterwarnings
 
 import torch
 import torch.optim as optim
@@ -125,4 +126,8 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    main(parse_args())
+    with catch_warnings():
+        filterwarnings("ignore", message=r".*CUDA initialization.*", append=True)
+        filterwarnings("ignore", message=r".*scale_factor.*", append=True)
+
+        main(parse_args())
