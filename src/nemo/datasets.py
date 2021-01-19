@@ -43,32 +43,23 @@ class ObjectDataset(Dataset):
         image_file = self.image_files[idx]
         image = Image.open(image_file)
 
-        # print(f" pre: {image.size=}")
         image_size = image.size
         largest_dim = max(image_size)
         scale_factor = largest_dim / self.max_image_size
-        # print(f"{largest_dim=}")
-        # print(f"{scale_factor=}")
         if scale_factor > 1:
             image_size = tuple(round(d / scale_factor) for d in image_size)
-            # print(f"{image_size=}")
             image = image.resize(image_size, resample=Image.NEAREST)
-
-        # print(f"post: {image.size=}")
 
         if self.transform:
             image = self.transform(image)
 
         mask_image = Image.open(self.mask_files[idx])
-
-        # print(f" pre: {mask_image.size=}")
         if scale_factor > 1:
             mask_image = mask_image.resize(image_size, resample=Image.NEAREST)
-        # print(f"post: {mask_image.size=}")
 
         mask = np.array(mask_image)
         obj_ids = np.unique(mask)
-        obj_ids = obj_ids[1:]  # Skip background (idx: 0)
+        obj_ids = obj_ids[1:]  # Skip background label
         masks = np.equal(mask, obj_ids[:, None, None])
 
         areas, boxes = [], []
