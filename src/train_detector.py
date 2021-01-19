@@ -18,7 +18,7 @@ from torchvision.transforms import Compose, ToTensor
 from nemo.datasets import ObjectDataset
 from nemo.utils import ensure_reproducibility, timestamp_path
 
-DEFAULT_DATA_DIR = Path("data/segmentation/combined")
+DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined/train")
 
 
 def main(args):
@@ -118,7 +118,7 @@ def parse_args():
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR, metavar="PATH", help="path to dataset directory")
     parser.add_argument("--output-dir", type=Path, required=True, metavar="PATH", help="path to output directory")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
-    parser.add_argument("--num-workers", type=int, metavar="NUM", default=2, help="number of workers to use for data loaders")
+    parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
     parser.add_argument("--dev-mode", action="store_true", help="run each model phase with only one batch")
 
