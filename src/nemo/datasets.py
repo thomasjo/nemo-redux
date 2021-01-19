@@ -16,7 +16,7 @@ from nemo.transforms import RandomDiscreteRotation
 
 
 class ObjectDataset(Dataset):
-    def __init__(self, root_dir, transform=None, target_transform=None, max_image_size=4000):
+    def __init__(self, root_dir, transform=None, target_transform=None, max_image_size=2000):
         super().__init__()
 
         if not isinstance(root_dir, Path):
