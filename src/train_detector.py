@@ -9,7 +9,7 @@ import torchvision as vision
 
 from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
-from ignite.utils import setup_logger, convert_tensor
+from ignite.utils import convert_tensor, setup_logger
 from torch.utils.data import DataLoader
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
