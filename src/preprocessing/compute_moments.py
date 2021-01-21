@@ -1,4 +1,4 @@
-from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from argparse import ArgumentParser
 from pathlib import Path
 
 import torch
@@ -62,7 +62,7 @@ def main(args):
 
 
 def parse_args():
-    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+    parser = ArgumentParser()
     parser.add_argument("--data-dir", type=Path, metavar="PATH", required=True, help="path to partitioned data directory")
     parser.add_argument("--num-workers", type=int, metavar="N", default=2, help="number of workers to use for preparing batches of data")
     return parser.parse_args()
