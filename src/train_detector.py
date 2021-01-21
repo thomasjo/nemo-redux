@@ -18,7 +18,7 @@ from torchvision.transforms import Compose, ToTensor
 from nemo.datasets import ObjectDataset
 from nemo.utils import ensure_reproducibility, timestamp_path
 
-DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined/train")
+DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
 
 
 def main(args):
@@ -34,7 +34,7 @@ def main(args):
     args.max_epochs = 2 if args.dev_mode else args.max_epochs
     args.epoch_length = 2 if args.dev_mode else None
 
-    dataset = ObjectDataset(args.data_dir, transform=Compose([ToTensor()]))
+    dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=collate_fn, num_workers=args.num_workers)
 
     # Number of classes/categories is equal to object classes + "background" class.
