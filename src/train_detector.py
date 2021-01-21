@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Union
 from warnings import catch_warnings, filterwarnings
 
 import torch
@@ -54,18 +54,17 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
 
     metrics = {
-        "classifier": lambda x: x["loss_classifier"],
-        "box_reg": lambda x: x["loss_box_reg"],
-        "mask": lambda x: x["loss_mask"],
-        "objectness": lambda x: x["loss_objectness"],
-        "rpn_box_reg": lambda x: x["loss_rpn_box_reg"],
+        "classifier": running_average("loss_classifier"),
+        "box_reg": running_average("loss_box_reg"),
+        "mask": running_average("loss_mask"),
+        "objectness": running_average("loss_objectness"),
+        "rpn_box_reg": running_average("loss_rpn_box_reg"),
     }
 
     trainer = create_trainer(model, optimizer, metrics, args)
 
-    @trainer.on(Events.ITERATION_COMPLETED)
+    @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
     def log_training_step(engine: Engine):
-        # engine.logger.info(engine.state.output)
         engine.logger.info(engine.state.metrics)
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -101,13 +100,15 @@ def create_trainer(model, optimizer, metrics, args):
     return trainer
 
 
-def running_average(metric):
+def running_average(metric: Union[Metric, Callable, str]):
     if isinstance(metric, Metric):
         return RunningAverage(metric)
     elif isinstance(metric, Callable):
         return RunningAverage(output_transform=metric)
+    elif isinstance(metric, str):
+        return running_average(lambda output: output[metric].item())
 
-    raise TypeError("unsupported metric: {}".format(type(metric)))
+    raise TypeError("unsupported metric type: {}".format(type(metric)))
 
 
 # TODO(thomasjo): Rename to something more descriptive.
