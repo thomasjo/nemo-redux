@@ -34,8 +34,8 @@ def main(args):
 
     # Development mode overrides.
     args.log_interval = 1 if args.dev_mode else 10
-    args.max_epochs = 2 if args.dev_mode else args.max_epochs
-    args.epoch_length = 2 if args.dev_mode else None
+    args.max_epochs = 1 if args.dev_mode else args.max_epochs
+    args.epoch_length = 1 if args.dev_mode else None
 
     dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
     dataloader = DataLoader(
