@@ -10,10 +10,13 @@ import torchvision as vision
 from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
+from PIL import Image, ImageDraw
+from torch import Tensor
 from torch.utils.data import DataLoader
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from torchvision.transforms import Compose, ToTensor
+from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import ObjectDataset
 from nemo.utils import ensure_reproducibility, timestamp_path
@@ -35,7 +38,24 @@ def main(args):
     args.epoch_length = 2 if args.dev_mode else None
 
     dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=collate_fn, num_workers=args.num_workers)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=2,
+        shuffle=True,
+        collate_fn=collate_fn,
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
+
+    test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=1,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
 
     # Number of classes/categories is equal to object classes + "background" class.
     num_classes = len(dataset.classes) + 1
@@ -62,14 +82,74 @@ def main(args):
     }
 
     trainer = create_trainer(model, optimizer, metrics, args)
+    evaluator = create_evaluator(model, metrics, args)
 
     @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
     def log_training_step(engine: Engine):
         engine.logger.info(engine.state.metrics)
 
     @trainer.on(Events.EPOCH_COMPLETED)
-    def log_training_epoch(engine: Engine):
-        engine.logger.info(engine.state.metrics)
+    def compute_validation_metrics(engine: Engine):
+        # Development mode overrides.
+        max_epochs = args.max_epochs if args.dev_mode else None
+        epoch_length = args.epoch_length if args.dev_mode else None
+        evaluator.run(test_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+
+    @evaluator.on(Events.EPOCH_COMPLETED)
+    def visualize_masks(engine: Engine):
+        images, targets = convert_tensor(engine.state.batch, device="cpu")
+        engine.logger.debug(f"{len(images)=}")
+
+        # Target: {"boxes": Tensor, "labels": Tensor, "masks": Tensor, ...}
+        image, target = images[0], targets[0]
+        engine.logger.debug(f"{image.shape=}")
+        engine.logger.debug(f"{target['masks'].shape=}")
+
+        pil_image = to_pil_image(image, mode="RGB")  # type: Image
+        pil_image = pil_image.convert(mode="RGBA")  # type: Image
+        pil_image.save(args.output_dir / "source.png")
+
+        # Output: {"boxes": Tensor, "labels": Tensor, "scores": Tensor, "masks": Tensor}.
+        output = engine.state.output[0]
+        engine.logger.debug(f"{len(output)=}")
+
+        score_threshold = 0.4
+        scores = output["scores"]  # type: Tensor
+        engine.logger.debug(f"{scores.shape=}")
+        engine.logger.debug(f"{scores.min()=}")
+        engine.logger.debug(f"{scores.max()=}")
+
+        boxes = output["boxes"]  # type: Tensor
+        engine.logger.debug(f"{boxes.shape=}")
+
+        box_image = pil_image.copy()
+        box_draw = ImageDraw.Draw(box_image)
+        for idx, box in enumerate(boxes):
+            if scores[idx].item() < score_threshold:
+                continue
+            box_draw.rectangle(box.numpy(), outline="red")
+        box_image.save(args.output_dir / "boxes.png")
+
+        # Output image with target masks.
+        masks = output["masks"]  # type: Tensor
+        engine.logger.debug(f"{masks.shape=}")
+
+        masks_dir: Path = args.output_dir / "_masks"
+        masks_dir.mkdir()
+
+        overlay_image = Image.new(mode="RGBA", size=pil_image.size, color="red")
+        mask_image = pil_image.copy()
+        for idx, mask in enumerate(masks):
+            if scores[idx].item() < score_threshold:
+                continue
+            pil_mask = to_pil_image(mask)  # type: Image
+            engine.logger.debug(f"{pil_mask.size=}")
+            engine.logger.debug(f"{pil_mask.mode=}")
+            mask_image = Image.composite(overlay_image, mask_image, pil_mask)
+            pil_mask.save(masks_dir / f"{idx:03d}.png")
+        mask_image.save(args.output_dir / "masks.png")
+
+        # Output image with predicted masks.
 
     trainer.run(dataloader, max_epochs=args.max_epochs, epoch_length=args.epoch_length)
 
@@ -98,6 +178,32 @@ def create_trainer(model, optimizer, metrics, args):
         running_average(metric).attach(trainer, name)
 
     return trainer
+
+
+def create_evaluator(model, metrics, args, name="evaluator"):
+    # evaluator = create_supervised_evaluator(
+    #     model,
+    #     metrics=None,
+    #     device=args.device,
+    #     non_blocking=True,
+    #     # output_transform=output_transform,
+    # )
+
+    @torch.no_grad()
+    def eval_step(engine, batch):
+        model.eval()
+
+        images, targets = convert_tensor(batch, device=args.device, non_blocking=True)
+        outputs = model(images)
+
+        return outputs
+
+    evaluator = Engine(eval_step)
+
+    # Configure default engine output logging.
+    evaluator.logger = setup_logger(name)
+
+    return evaluator
 
 
 def running_average(metric: Union[Metric, Callable, str]):
