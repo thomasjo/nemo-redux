@@ -61,7 +61,10 @@ def main(args):
     num_classes = len(dataset.classes) + 1
 
     # NOTE: See https://pytorch.org/docs/stable/torchvision/models.html#mask-r-cnn.
-    model = vision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
+    model = vision.models.detection.maskrcnn_resnet50_fpn(
+        pretrained=True,
+        box_detections_per_img=256,
+    )
 
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
