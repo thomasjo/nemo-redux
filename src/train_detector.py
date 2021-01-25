@@ -163,9 +163,9 @@ def create_trainer(model, optimizer, metrics, args):
 
         images, targets = convert_tensor(batch, device=args.device, non_blocking=True)
         loss_dict = model(images, targets)
-        losses = sum(loss_dict.values())
 
         optimizer.zero_grad()
+        losses = sum(loss_dict.values())
         losses.backward()
         optimizer.step()
 
