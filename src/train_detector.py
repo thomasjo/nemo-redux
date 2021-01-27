@@ -40,11 +40,11 @@ def main(args):
     dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
     dataloader = DataLoader(
         dataset,
-        batch_size=2,
+        batch_size=1,
         shuffle=True,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        pin_memory=True,
+        # pin_memory=True,
     )
 
     test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
@@ -54,7 +54,7 @@ def main(args):
         shuffle=False,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        pin_memory=True,
+        # pin_memory=True,
     )
 
     # Number of classes/categories is equal to object classes + "background" class.
@@ -87,9 +87,19 @@ def main(args):
     trainer = create_trainer(model, optimizer, metrics, args)
     evaluator = create_evaluator(model, metrics, args)
 
-    @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
-    def log_training_step(engine: Engine):
-        engine.logger.info(engine.state.metrics)
+    # @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
+    # def log_training_step(engine: Engine):
+    #     engine.logger.info(engine.state.metrics)
+
+    @trainer.on(Events.ITERATION_STARTED)
+    def debug_training_step(engine: Engine):
+        engine.logger.info(engine.state.iteration)
+        engine.logger.info(torch.cuda.memory_summary())
+
+    @evaluator.on(Events.ITERATION_STARTED)
+    def debug_evaluation_step(engine: Engine):
+        engine.logger.info(engine.state.iteration)
+        engine.logger.info(torch.cuda.memory_summary())
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def compute_validation_metrics(engine: Engine):
@@ -161,11 +171,13 @@ def create_trainer(model, optimizer, metrics, args):
     def train_step(engine, batch):
         model.train()
 
-        images, targets = convert_tensor(batch, device=args.device, non_blocking=True)
+        torch.cuda.empty_cache()  # FIXME: Remove
+        torch.cuda.synchronize()
+        images, targets = convert_tensor(batch, device=args.device, non_blocking=False)
         loss_dict = model(images, targets)
+        losses = sum(loss_dict.values())
 
         optimizer.zero_grad()
-        losses = sum(loss_dict.values())
         losses.backward()
         optimizer.step()
 
@@ -177,27 +189,30 @@ def create_trainer(model, optimizer, metrics, args):
     trainer.logger = setup_logger("trainer")
 
     # Compute running averages of metrics during training.
-    for name, metric in metrics.items():
-        running_average(metric).attach(trainer, name)
+    # for name, metric in metrics.items():
+    #     running_average(metric).attach(trainer, name)
 
     return trainer
 
 
 def create_evaluator(model, metrics, args, name="evaluator"):
-    # evaluator = create_supervised_evaluator(
-    #     model,
-    #     metrics=None,
-    #     device=args.device,
-    #     non_blocking=True,
-    #     # output_transform=output_transform,
-    # )
-
     @torch.no_grad()
     def eval_step(engine, batch):
+        n_threads = torch.get_num_threads()
+        # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
+        torch.set_num_threads(1)
+
         model.eval()
 
-        images, targets = convert_tensor(batch, device=args.device, non_blocking=True)
+        torch.cuda.empty_cache()  # FIXME: Remove
+        torch.cuda.synchronize()
+        # images, targets = convert_tensor(batch, device=args.device, non_blocking=False)
+        images, targets = batch
+        images = convert_tensor(images, device=args.device, non_blocking=False)
         outputs = model(images)
+
+        # NOTE: Undo hack above.
+        torch.set_num_threads(n_threads)
 
         return outputs
 

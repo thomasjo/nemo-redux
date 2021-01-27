@@ -20,7 +20,6 @@ psutil==5.8.0; python_version >= "2.7" and python_full_version < "3.0.0" or pyth
 pyparsing==2.4.7; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.6"
 python-dateutil==2.8.1; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.4.0" and python_version >= "3.6"
 pytorch-ignite==0.4.2
-pyyaml==5.4.1; (python_version >= "2.7" and python_full_version < "3.0.0") or (python_full_version >= "3.6.0")
 requests==2.25.1; python_version >= "2.7" and python_full_version < "3.0.0" or python_full_version >= "3.5.0"
 scikit-learn==0.23.2; python_version >= "3.6"
 scipy==1.6.0; python_version >= "3.7"
@@ -30,7 +29,6 @@ six==1.15.0; python_version >= "3.6" and python_full_version < "3.0.0" or python
 smmap==3.0.5; python_version >= "3.4" and python_full_version < "3.0.0" or python_full_version >= "3.4.0" and python_version >= "3.4"
 subprocess32==3.5.4; python_version >= "2.7" and python_full_version < "3.0.0" or python_full_version >= "3.4.0" and python_version < "4"
 threadpoolctl==2.1.0; python_version >= "3.6"
-torch==1.7.1; python_full_version >= "3.6.2"
 torchsummary==1.5.1
 tqdm==4.56.0; (python_version >= "2.7" and python_full_version < "3.0.0") or (python_full_version >= "3.4.0")
 typing-extensions==3.7.4.3; python_full_version >= "3.6.2"
