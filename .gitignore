@@ -5,6 +5,7 @@
 # Project-specific.
 /data
 /output
+/results
 /src/scratch
 
 # Random clutter.
