@@ -5,6 +5,8 @@ metadata:
 spec:
   template:
     spec:
+      nodeSelector:
+        springfield.uit.no/gpu-type: titan-xp
       containers:
       - name: nemo-redux-detector
         image: thomasjo/nemo-redux:detection
@@ -15,6 +17,7 @@ spec:
         - src/train_detector.py
         - --output-dir=output/detection
         - --num-workers=0
+        - --seed=42
         stdin: true
         tty: true
         envFrom:
