@@ -87,19 +87,27 @@ def main(args):
     trainer = create_trainer(model, optimizer, metrics, args)
     evaluator = create_evaluator(model, metrics, args)
 
-    # @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
-    # def log_training_step(engine: Engine):
-    #     engine.logger.info(engine.state.metrics)
+    @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
+    def log_training_step(engine: Engine):
+        engine.logger.info(engine.state.metrics)
 
     @trainer.on(Events.ITERATION_STARTED)
     def debug_training_step(engine: Engine):
         engine.logger.info(engine.state.iteration)
-        engine.logger.info(torch.cuda.memory_summary())
 
     @evaluator.on(Events.ITERATION_STARTED)
     def debug_evaluation_step(engine: Engine):
         engine.logger.info(engine.state.iteration)
-        engine.logger.info(torch.cuda.memory_summary())
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def save_model(engine: Engine):
+        ckpt = {
+            "epoch": engine.state.epoch,
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+        }
+        ckpt_file = args.output_dir / f"ckpt-{engine.state.epoch:02d}.pt"
+        torch.save(ckpt, ckpt_file)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def compute_validation_metrics(engine: Engine):
@@ -113,6 +121,9 @@ def main(args):
         images, targets = convert_tensor(engine.state.batch, device="cpu")
         engine.logger.debug(f"{len(images)=}")
 
+        output_dir: Path = args.output_dir / f"{trainer.state.epoch:02d}"
+        output_dir.mkdir()
+
         # Target: {"boxes": Tensor, "labels": Tensor, "masks": Tensor, ...}
         image, target = images[0], targets[0]
         engine.logger.debug(f"{image.shape=}")
@@ -120,7 +131,7 @@ def main(args):
 
         pil_image = to_pil_image(image, mode="RGB")  # type: Image
         pil_image = pil_image.convert(mode="RGBA")  # type: Image
-        pil_image.save(args.output_dir / "source.png")
+        pil_image.save(output_dir / "source.png")
 
         # Output: {"boxes": Tensor, "labels": Tensor, "scores": Tensor, "masks": Tensor}.
         output = engine.state.output[0]
@@ -141,26 +152,24 @@ def main(args):
             if scores[idx].item() < score_threshold:
                 continue
             box_draw.rectangle(box.numpy(), outline="red")
-        box_image.save(args.output_dir / "boxes.png")
+        box_image.save(output_dir / "boxes.png")
 
         # Output image with target masks.
         masks = output["masks"]  # type: Tensor
         engine.logger.debug(f"{masks.shape=}")
 
-        masks_dir: Path = args.output_dir / "_masks"
+        masks_dir = output_dir / "_masks"
         masks_dir.mkdir()
 
         overlay_image = Image.new(mode="RGBA", size=pil_image.size, color="red")
         mask_image = pil_image.copy()
         for idx, mask in enumerate(masks):
+            pil_mask = to_pil_image(mask)  # type: Image
+            pil_mask.save(masks_dir / f"{idx:03d}.png")
             if scores[idx].item() < score_threshold:
                 continue
-            pil_mask = to_pil_image(mask)  # type: Image
-            engine.logger.debug(f"{pil_mask.size=}")
-            engine.logger.debug(f"{pil_mask.mode=}")
             mask_image = Image.composite(overlay_image, mask_image, pil_mask)
-            pil_mask.save(masks_dir / f"{idx:03d}.png")
-        mask_image.save(args.output_dir / "masks.png")
+        mask_image.save(output_dir / "masks.png")
 
         # Output image with predicted masks.
 
