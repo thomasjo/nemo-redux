@@ -180,8 +180,6 @@ def create_trainer(model, optimizer, metrics, args):
     def train_step(engine, batch):
         model.train()
 
-        torch.cuda.empty_cache()  # FIXME: Remove
-        torch.cuda.synchronize()
         images, targets = convert_tensor(batch, device=args.device, non_blocking=False)
         loss_dict = model(images, targets)
         losses = sum(loss_dict.values())
@@ -190,7 +188,10 @@ def create_trainer(model, optimizer, metrics, args):
         losses.backward()
         optimizer.step()
 
-        return loss_dict
+        # We only need the scalar values.
+        loss_values = {k: v.item() for k, v in loss_dict.items()}
+
+        return loss_values
 
     trainer = Engine(train_step)
 
@@ -198,8 +199,8 @@ def create_trainer(model, optimizer, metrics, args):
     trainer.logger = setup_logger("trainer")
 
     # Compute running averages of metrics during training.
-    # for name, metric in metrics.items():
-    #     running_average(metric).attach(trainer, name)
+    for name, metric in metrics.items():
+        running_average(metric).attach(trainer, name)
 
     return trainer
 
@@ -207,18 +208,19 @@ def create_trainer(model, optimizer, metrics, args):
 def create_evaluator(model, metrics, args, name="evaluator"):
     @torch.no_grad()
     def eval_step(engine, batch):
-        n_threads = torch.get_num_threads()
         # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
+        n_threads = torch.get_num_threads()
         torch.set_num_threads(1)
 
         model.eval()
 
-        torch.cuda.empty_cache()  # FIXME: Remove
-        torch.cuda.synchronize()
-        # images, targets = convert_tensor(batch, device=args.device, non_blocking=False)
         images, targets = batch
         images = convert_tensor(images, device=args.device, non_blocking=False)
         outputs = model(images)
+
+        outputs = convert_tensor(outputs, device="cpu", non_blocking=False)
+        results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
+        engine.logger.info(results)
 
         # NOTE: Undo hack above.
         torch.set_num_threads(n_threads)
@@ -233,15 +235,16 @@ def create_evaluator(model, metrics, args, name="evaluator"):
     return evaluator
 
 
-def running_average(metric: Union[Metric, Callable, str]):
-    if isinstance(metric, Metric):
-        return RunningAverage(metric)
-    elif isinstance(metric, Callable):
-        return RunningAverage(output_transform=metric)
-    elif isinstance(metric, str):
-        return running_average(lambda output: output[metric].item())
+def running_average(src: Union[Metric, Callable, str]):
+    if isinstance(src, Metric):
+        return RunningAverage(src)
+    elif isinstance(src, Callable):
+        return RunningAverage(output_transform=src)
+    elif isinstance(src, str):
+        # TODO: Handle the scenario where output[src] is a Tensor; return .item() value somehow.
+        return running_average(lambda output: output[src])
 
-    raise TypeError("unsupported metric type: {}".format(type(metric)))
+    raise TypeError("unsupported metric type: {}".format(type(src)))
 
 
 # TODO(thomasjo): Rename to something more descriptive.
