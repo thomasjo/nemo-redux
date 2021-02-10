@@ -87,6 +87,7 @@ def main(args):
     model.roi_heads.box_head = StochasticTwoMLPHead(
         model.roi_heads.box_head.fc6.in_features,
         model.roi_heads.box_head.fc7.out_features,
+        dropout_rate=args.dropout_rate,
     )
 
     # Customize box predictor.
@@ -282,6 +283,7 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR, metavar="PATH", help="path to dataset directory")
     parser.add_argument("--output-dir", type=Path, required=True, metavar="PATH", help="path to output directory")
+    parser.add_argument("--dropout-rate", type=float, default=0.2, metavar="NUM", help="dropout probability for stochastic sampling")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
