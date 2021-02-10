@@ -45,8 +45,14 @@ def main(args):
         label = [category, is_large]
         entry_labels.append(label)
 
-    indices = np.arange(len(entry_labels))
-    train_idx, test_idx = train_test_split(indices, stratify=entry_labels, test_size=0.27)
+    _, num_entry_labels = np.unique(np.asarray(entry_labels)[:, 0], return_counts=True)
+    # HACK: Check if stratified sampling is possible.
+    if not np.all(num_entry_labels > 1):
+        print("Warning: stratified sampling not possible")
+        entry_labels = None
+
+    indices = np.arange(np.sum(num_entry_labels))
+    train_idx, test_idx = train_test_split(indices, stratify=entry_labels, test_size=args.test_size)
     partitions = [("train", train_idx), ("test", test_idx)]
 
     # entry_labels = np.array(entry_labels)
@@ -103,6 +109,7 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--source-dir", type=Path, required=True, metavar="PATH", help="path to unpartitioned dataset directory")
     parser.add_argument("--output-dir", type=Path, required=True, metavar="PATH", help="path to output directory")
+    parser.add_argument("--test-size", type=float, default=0.27, metavar="NUM", help="ratio of dataset to use for test partition")
 
     return parser.parse_args()
 
