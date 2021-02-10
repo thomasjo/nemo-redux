@@ -9,6 +9,8 @@ import numpy as np
 
 from sklearn.model_selection import train_test_split
 
+EXCLUDED_CATEGORIES = [5, 6]
+
 
 def main(args):
     random.seed(42)
@@ -24,7 +26,11 @@ def main(args):
         max_coords = []
         categories = []
         for region in entry["regions"]:
-            categories.append(int(region["region_attributes"]["category"]))
+            region_category = int(region["region_attributes"]["category"])
+            if region_category in EXCLUDED_CATEGORIES:
+                continue
+
+            categories.append(region_category)
 
             xs = np.array(region["shape_attributes"]["all_points_x"])
             ys = np.array(region["shape_attributes"]["all_points_y"])
