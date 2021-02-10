@@ -63,7 +63,9 @@ def main(args):
 
     # Safely prepare a fresh output directory.
     if args.output_dir.exists():
-        assert all(map(lambda x: x.is_dir() and x.name in partitions.keys(), args.output_dir.iterdir()))
+        # TODO: Fix assertion to ensure deleting the output directory is safe-ish.
+        # partition_names = map(lambda x: x[0], partitions)
+        # assert all(map(lambda x: x.is_dir() and x.name in partition_names, args.output_dir.iterdir()))
         shutil.rmtree(args.output_dir)
     args.output_dir.mkdir(parents=True)
 
