@@ -185,14 +185,14 @@ def main(args):
         masks = output["masks"]  # type: Tensor
         engine.logger.debug(f"{masks.shape=}")
 
-        masks_dir = output_dir / "_masks"
-        masks_dir.mkdir()
+        # masks_dir = output_dir / "_masks"
+        # masks_dir.mkdir()
 
         overlay_image = Image.new(mode="RGBA", size=pil_image.size, color="red")
         mask_image = pil_image.copy()
         for idx, mask in enumerate(masks):
             pil_mask = to_pil_image(mask)  # type: Image
-            pil_mask.save(masks_dir / f"{idx:03d}.png")
+            # pil_mask.save(masks_dir / f"{idx:03d}.png")
             if scores[idx].item() < score_threshold:
                 continue
             mask_image = Image.composite(overlay_image, mask_image, pil_mask)
