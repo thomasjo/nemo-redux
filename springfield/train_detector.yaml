@@ -16,7 +16,7 @@ spec:
         - python
         - src/train_detector.py
         - --output-dir=output/detection
-        - --num-workers=0
+        - --num-workers=1
         - --seed=42
         stdin: true
         tty: true
