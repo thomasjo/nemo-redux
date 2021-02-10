@@ -42,8 +42,9 @@ class StochasticTwoMLPHead(TwoMLPHead):
 
 
 def main(args):
-    # TODO(thomasjo): Make this be configurable.
-    ensure_reproducibility(seed=args.seed)
+    # Use fixed random seed if requested.
+    if args.seed is not None:
+        ensure_reproducibility(seed=args.seed)
 
     # Append timestamp to output directory.
     args.output_dir = timestamp_path(args.output_dir)
@@ -287,7 +288,7 @@ def parse_args():
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
-    parser.add_argument("--seed", type=int, metavar="NUM", default=42, help="random state seed")
+    parser.add_argument("--seed", type=int, metavar="NUM", help="random state seed")
     parser.add_argument("--dev-mode", action="store_true", help="run each model phase with only one batch")
 
     return parser.parse_args()
