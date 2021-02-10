@@ -244,10 +244,11 @@ def create_evaluator(model, metrics, args, name="evaluator"):
         images, targets = batch
         images = convert_tensor(images, device=args.device, non_blocking=True)
         outputs = model(images)
+        outputs = convert_tensor(outputs, device="cpu")
 
-        outputs = convert_tensor(outputs, device="cpu", non_blocking=False)
+        # Save results in engine state.
         results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
-        engine.logger.info(results)
+        engine.state.result = results
 
         # NOTE: Undo hack above.
         torch.set_num_threads(n_threads)
