@@ -12,7 +12,7 @@ spec:
         image: thomasjo/nemo-redux:detection
         imagePullPolicy: Always
         workingDir: /storage/nemo-redux
-        command: ["bash", "scripts/detector_suite"]
+        command: ["bash", "bin/detector_suite"]
         stdin: true
         tty: true
         envFrom:
