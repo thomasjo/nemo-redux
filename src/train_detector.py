@@ -62,7 +62,7 @@ def main(args):
         shuffle=True,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        pin_memory=True,
+        # pin_memory=True,
     )
 
     test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
@@ -72,7 +72,7 @@ def main(args):
         shuffle=False,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        pin_memory=True,
+        # pin_memory=True,
     )
 
     # Number of classes/categories is equal to object classes + "background" class.
@@ -207,7 +207,7 @@ def create_trainer(model, optimizer, metrics, args):
     def train_step(engine, batch):
         model.train()
 
-        images, targets = convert_tensor(batch, device=args.device, non_blocking=True)
+        images, targets = convert_tensor(batch, device=args.device, non_blocking=False)
         loss_dict = model(images, targets)
         losses = sum(loss_dict.values())
 
@@ -242,7 +242,7 @@ def create_evaluator(model, metrics, args, name="evaluator"):
         model.eval()
 
         images, targets = batch
-        images = convert_tensor(images, device=args.device, non_blocking=True)
+        images = convert_tensor(images, device=args.device, non_blocking=False)
         outputs = model(images)
         outputs = convert_tensor(outputs, device="cpu")
 
