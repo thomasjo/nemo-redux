@@ -84,7 +84,7 @@ def main(args):
         box_detections_per_img=256,
     )
 
-    # Customize box head.
+    # Use box head with dropout sampling support.
     model.roi_heads.box_head = StochasticTwoMLPHead(
         model.roi_heads.box_head.fc6.in_features,
         model.roi_heads.box_head.fc7.out_features,
