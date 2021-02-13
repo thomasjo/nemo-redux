@@ -2,13 +2,11 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import cv2 as cv
-import numpy as np
 import torch
 
 from torchvision.transforms.functional import to_tensor
 
 from nemo.models import initialize_detector
-from nemo.utils import timestamp_path
 
 CATEGORIES = [
     "BACKGROUND",
