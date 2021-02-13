@@ -89,13 +89,14 @@ def main(args):
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def save_model(engine: Engine):
-        ckpt = {
+        ckpt_file = args.output_dir / f"ckpt-{engine.state.epoch:02d}.pt"
+        torch.save({
             "epoch": engine.state.epoch,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
-        }
-        ckpt_file = args.output_dir / f"ckpt-{engine.state.epoch:02d}.pt"
-        torch.save(ckpt, ckpt_file)
+            "dropout_rate": args.dropout_rate,
+            "num_classes": num_classes,
+        }, ckpt_file)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def compute_validation_metrics(engine: Engine):
