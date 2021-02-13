@@ -4,9 +4,7 @@ from typing import Callable, Union
 from warnings import catch_warnings, filterwarnings
 
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
-import torchvision as vision
 
 from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
@@ -14,31 +12,14 @@ from ignite.utils import convert_tensor, setup_logger
 from PIL import Image, ImageDraw
 from torch import Tensor
 from torch.utils.data import DataLoader
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, TwoMLPHead
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from torchvision.transforms import Compose, ToTensor
 from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import ObjectDataset
+from nemo.models import initialize_detector
 from nemo.utils import ensure_reproducibility, timestamp_path
 
 DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
-
-
-class StochasticTwoMLPHead(TwoMLPHead):
-    def __init__(self, in_channels, representation_size, dropout_rate=0.2):
-        super().__init__(in_channels, representation_size)
-        self.dropout_rate = dropout_rate
-
-    def forward(self, x):
-        x = x.flatten(start_dim=1)
-
-        x = F.relu(self.fc6(x))
-        x = F.dropout(x, self.dropout_rate)
-        x = F.relu(self.fc7(x))
-        x = F.dropout(x, self.dropout_rate)
-
-        return x
 
 
 def main(args):
@@ -78,28 +59,8 @@ def main(args):
     # Number of classes/categories is equal to object classes + "background" class.
     num_classes = len(dataset.classes) + 1
 
-    # NOTE: See https://pytorch.org/docs/stable/torchvision/models.html#mask-r-cnn.
-    model = vision.models.detection.maskrcnn_resnet50_fpn(
-        pretrained=True,
-        box_detections_per_img=256,
-    )
-
-    # Use box head with dropout sampling support.
-    model.roi_heads.box_head = StochasticTwoMLPHead(
-        model.roi_heads.box_head.fc6.in_features,
-        model.roi_heads.box_head.fc7.out_features,
-        dropout_rate=args.dropout_rate,
-    )
-
-    # Customize box predictor.
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-
-    # Customize mask predictor.
-    hidden_layer = 256
-    in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
-
+    # Prepare model and optimizer.
+    model = initialize_detector(num_classes, args.dropout_rate)
     model = model.to(device=args.device)
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
 
