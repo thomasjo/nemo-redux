@@ -5,18 +5,16 @@ from warnings import catch_warnings, filterwarnings
 import numpy as np
 import torch
 
-from ignite.contrib.engines.common import setup_wandb_logging
-from ignite.contrib.handlers import WandBLogger
 from ignite.engine import Engine, Events
-from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, ToTensor
 
 from nemo.datasets import ObjectDataset
 from nemo.models import initialize_detector
-from nemo.vendor import matterport
 from nemo.utils import ensure_reproducibility, timestamp_path
+from nemo.vendor import matterport
+
 
 DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
 
@@ -70,14 +68,6 @@ def main(args):
         pred_masks = np.swapaxes(predictions["masks"].ge(0.5).mul(255).byte().numpy().squeeze(), 0, -1)
         pred_labels = predictions["labels"].numpy()
         pred_scores = predictions["scores"].numpy()
-
-        print(gt_masks.shape)
-        print(pred_masks.shape)
-
-        # print(pred_boxes)
-        # print(pred_masks)
-        # print(pred_labels)
-        # print(pred_scores)
 
         # NOTE: gt_boxes, gt_class_ids, gt_masks, pred_boxes, pred_class_ids, pred_scores, pred_masks
         mean_ap, precisions, recalls, overlaps = matterport.compute_ap(
@@ -150,23 +140,6 @@ def create_evaluator(model, args, name="evaluator"):
 def collate_fn(batch):
     images, targets = zip(*batch)
     return list(images), list(targets)
-
-
-def initialize_wandb(model, args):
-    # Run wandb in "offline" mode when debugging.
-    mode = "offline" if args.dev_mode else None,
-
-    logger = WandBLogger(
-        mode=mode,
-        config=args,
-        config_exclude_keys=["dev_mode"],
-        group="detector",
-    )
-
-    # Log gradients and model parameters.
-    logger.watch(model, log="all", log_freq=args.log_interval)
-
-    return logger
 
 
 def parse_args():
