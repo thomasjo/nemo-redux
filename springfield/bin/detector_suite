@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -eu
+
+function random-string() {
+  # shellcheck disable=SC2002
+  cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w "${1:-32}" | head -n 1
+}
+
+suite_id="$(random-string 4)"
+echo "Launching suite with ID \"${suite_id}\"..."
+
+# Training args.
+data_dir="data/segmentation/partitioned/combined"
+output_dir="output/detection/suite/${suite_id}"
+dropout_rate=0.2
+num_workers=0
+seed=42  # Make suite deterministic.
+
+# Suite params.
+num_repetitions=5
+
+# Attempt to speed things up by copying data to host.
+host_dir="/tmp/data"
+echo "Copying data from ${data_dir} -> ${host_dir}..."
+cp -r "${data_dir}" "${host_dir}"
+data_dir="${host_dir}"
+
+echo "Running experiments"
+echo "-------------------"
+
+# Train some non-stochastic models...
+for ((i=0; i<num_repetitions; i++)); do
+  echo -e "\n** Non-stochastic run #$((i+1))..."
+  python src/train_detector.py \
+    --data-dir="${data_dir}" \
+    --output-dir="${output_dir}" \
+    --dropout-rate=0 \
+    --num-workers=${num_workers} \
+    --seed=$((seed+i))
+done
+
+# Train some models with dropout sampling...
+for ((i=0; i<num_repetitions; i++)); do
+  echo -e "\n** Stochastic run #$((i+1))..."
+  python src/train_detector.py \
+    --data-dir="${data_dir}" \
+    --output-dir="${output_dir}" \
+    --dropout-rate=$dropout_rate \
+    --num-workers=${num_workers} \
+    --seed=$((seed+i))
+done
