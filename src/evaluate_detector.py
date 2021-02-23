@@ -14,6 +14,8 @@ from nemo.datasets import ObjectDataset
 from nemo.models import initialize_detector
 from nemo.utils import ensure_reproducibility, timestamp_path
 from nemo.vendor import matterport
+from nemo.vendor.torchvision.coco_eval import CocoEvaluator
+from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
 
 
 DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
@@ -53,55 +55,49 @@ def main(args):
     model.load_state_dict(ckpt.get("model"))
     model.requires_grad_(False)
 
-    evaluator = create_evaluator(model, args)
+    # evaluator = create_evaluator(model, args)
+    # evaluator.run(
+    #     dataloader,
+    #     max_epochs=args.max_epochs,
+    #     epoch_length=args.epoch_length,
+    # )
 
-    @evaluator.on(Events.ITERATION_COMPLETED)
-    def update_metrics(engine: Engine):
-        images, targets = engine.state.batch
-        images, targets = images[0], targets[0]
-        gt_boxes = targets["boxes"].to(torch.int64).numpy()
-        gt_masks = np.swapaxes(targets["masks"].numpy(), 0, -1)
-        gt_labels = targets["labels"].numpy()
+    print("Making coco_gt...")
+    coco_gt = convert_to_coco_api(dataloader.dataset)
+    print("DONE!!!!!")
 
-        predictions = engine.state.output[0]
-        pred_boxes = predictions["boxes"].to(torch.int64).numpy()
-        pred_masks = np.swapaxes(predictions["masks"].ge(0.5).mul(255).byte().numpy().squeeze(), 0, -1)
-        pred_labels = predictions["labels"].numpy()
-        pred_scores = predictions["scores"].numpy()
+    for _ in range(1):
+        with torch.no_grad():
+            # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
+            # n_threads = torch.get_num_threads()
+            # torch.set_num_threads(1)
 
-        # NOTE: gt_boxes, gt_class_ids, gt_masks, pred_boxes, pred_class_ids, pred_scores, pred_masks
-        mean_ap, precisions, recalls, overlaps = matterport.compute_ap(
-            gt_boxes,
-            gt_labels,
-            gt_masks,
-            pred_boxes,
-            pred_labels,
-            pred_scores,
-            pred_masks,
-        )
+            iou_types = ["bbox", "segm"]
+            coco_evaluator = CocoEvaluator(coco_gt, iou_types)
 
-        print("mAP", mean_ap)
-        print("precisions", precisions, precisions.shape)
-        print("recalls", recalls, recalls.shape)
-        print("overlaps", overlaps, overlaps.shape)
+            for images, targets in dataloader:
+                model.eval()
 
-        mean_ap_range = matterport.compute_ap_range(
-            gt_boxes,
-            gt_labels,
-            gt_masks,
-            pred_boxes,
-            pred_labels,
-            pred_scores,
-            pred_masks,
-        )
+                print(targets[0]["image_id"])
+                outputs = model(images)
+                results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
 
-        print("mAP (0.5::0.95)", mean_ap_range)
+                coco_evaluator.update(results)
 
-    evaluator.run(
-        dataloader,
-        max_epochs=args.max_epochs,
-        epoch_length=args.epoch_length,
-    )
+                # break
+
+            coco_evaluator.synchronize_between_processes()
+            coco_evaluator.accumulate()
+            coco_evaluator.summarize()
+
+            for name, ce in coco_evaluator.coco_eval.items():
+                print("-" * 80)
+                print(name)
+                for k, v in ce.eval.items():
+                    print(k, v.shape if hasattr(v, "shape") else v)
+
+            # NOTE: Undo hack.
+            # torch.set_num_threads(n_threads)
 
 
 def create_evaluator(model, args, name="evaluator"):
