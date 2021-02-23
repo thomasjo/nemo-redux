@@ -9,15 +9,14 @@ import torch.optim as optim
 from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
-from PIL import Image, ImageDraw
-from torch import Tensor
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, ToTensor
-from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import ObjectDataset
 from nemo.models import initialize_detector
 from nemo.utils import ensure_reproducibility, timestamp_path
+from nemo.vendor.torchvision.coco_eval import CocoEvaluator
+from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
 
 DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
 
@@ -43,7 +42,6 @@ def main(args):
         shuffle=True,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        # pin_memory=True,
     )
 
     test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
@@ -53,8 +51,11 @@ def main(args):
         shuffle=False,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        # pin_memory=True,
     )
+
+    print("Making coco_gt...")
+    coco_gt = convert_to_coco_api(test_dataset)
+    print("DONE!!!!!")
 
     # Number of classes/categories is equal to object classes + "background" class.
     num_classes = len(dataset.classes) + 1
@@ -64,28 +65,8 @@ def main(args):
     model = model.to(device=args.device)
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
 
-    metrics = {
-        "classifier": running_average("loss_classifier"),
-        "box_reg": running_average("loss_box_reg"),
-        "mask": running_average("loss_mask"),
-        "objectness": running_average("loss_objectness"),
-        "rpn_box_reg": running_average("loss_rpn_box_reg"),
-    }
-
-    trainer = create_trainer(model, optimizer, metrics, args)
-    evaluator = create_evaluator(model, metrics, args)
-
-    @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
-    def log_training_step(engine: Engine):
-        engine.logger.info(engine.state.metrics)
-
-    @trainer.on(Events.ITERATION_STARTED)
-    def debug_training_step(engine: Engine):
-        engine.logger.info(engine.state.iteration)
-
-    @evaluator.on(Events.ITERATION_STARTED)
-    def debug_evaluation_step(engine: Engine):
-        engine.logger.info(engine.state.iteration)
+    trainer = create_trainer(model, optimizer, args)
+    evaluator = create_evaluator(model, args)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def save_model(engine: Engine):
@@ -98,74 +79,48 @@ def main(args):
             "num_classes": num_classes,
         }, ckpt_file)
 
+    @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
+    def log_training_step(engine: Engine):
+        engine.logger.info(engine.state.metrics)
+
     @trainer.on(Events.EPOCH_COMPLETED)
-    def compute_validation_metrics(engine: Engine):
+    def run_evaluator(engine: Engine):
         # Development mode overrides.
         max_epochs = args.max_epochs if args.dev_mode else None
         epoch_length = args.epoch_length if args.dev_mode else None
-        evaluator.run(test_dataloader, max_epochs=max_epochs, epoch_length=epoch_length)
+        evaluator.run(
+            test_dataloader,
+            max_epochs=max_epochs,
+            epoch_length=epoch_length,
+        )
+
+    @evaluator.on(Events.STARTED)
+    def prepare_coco_evaluator(engine: Engine):
+        iou_types = ["bbox", "segm"]
+        engine.state.coco_evaluator = CocoEvaluator(coco_gt, iou_types)
+
+    @evaluator.on(Events.ITERATION_COMPLETED)
+    def update_coco_evaluator(engine: Engine):
+        engine.state.coco_evaluator.update(engine.state.results)
+
+    @evaluator.on(Events.COMPLETED)
+    def log_coco_evaluator(engine: Engine):
+        engine.state.coco_evaluator.coco_evaluator.synchronize_between_processes()
+        engine.state.coco_evaluator.coco_evaluator.accumulate()
+        engine.state.coco_evaluator.coco_evaluator.summarize()
 
     @evaluator.on(Events.EPOCH_COMPLETED)
     def visualize_masks(engine: Engine):
-        images, targets = convert_tensor(engine.state.batch, device="cpu")
-        engine.logger.debug(f"{len(images)=}")
+        pass
 
-        output_dir: Path = args.output_dir / f"{trainer.state.epoch:02d}"
-        output_dir.mkdir()
-
-        # Target: {"boxes": Tensor, "labels": Tensor, "masks": Tensor, ...}
-        image, target = images[0], targets[0]
-        engine.logger.debug(f"{image.shape=}")
-        engine.logger.debug(f"{target['masks'].shape=}")
-
-        pil_image = to_pil_image(image, mode="RGB")  # type: Image
-        pil_image = pil_image.convert(mode="RGBA")  # type: Image
-        pil_image.save(output_dir / "source.png")
-
-        # Output: {"boxes": Tensor, "labels": Tensor, "scores": Tensor, "masks": Tensor}.
-        output = engine.state.output[0]
-        engine.logger.debug(f"{len(output)=}")
-
-        score_threshold = 0.4
-        scores = output["scores"]  # type: Tensor
-        engine.logger.debug(f"{scores.shape=}")
-        engine.logger.debug(f"{scores.min()=}")
-        engine.logger.debug(f"{scores.max()=}")
-
-        boxes = output["boxes"]  # type: Tensor
-        engine.logger.debug(f"{boxes.shape=}")
-
-        box_image = pil_image.copy()
-        box_draw = ImageDraw.Draw(box_image)
-        for idx, box in enumerate(boxes):
-            if scores[idx].item() < score_threshold:
-                continue
-            box_draw.rectangle(box.numpy(), outline="red")
-        box_image.save(output_dir / "boxes.png")
-
-        # Output image with target masks.
-        masks = output["masks"]  # type: Tensor
-        engine.logger.debug(f"{masks.shape=}")
-
-        # masks_dir = output_dir / "_masks"
-        # masks_dir.mkdir()
-
-        overlay_image = Image.new(mode="RGBA", size=pil_image.size, color="red")
-        mask_image = pil_image.copy()
-        for idx, mask in enumerate(masks):
-            pil_mask = to_pil_image(mask)  # type: Image
-            # pil_mask.save(masks_dir / f"{idx:03d}.png")
-            if scores[idx].item() < score_threshold:
-                continue
-            mask_image = Image.composite(overlay_image, mask_image, pil_mask)
-        mask_image.save(output_dir / "masks.png")
-
-        # Output image with predicted masks.
-
-    trainer.run(dataloader, max_epochs=args.max_epochs, epoch_length=args.epoch_length)
+    trainer.run(
+        dataloader,
+        max_epochs=args.max_epochs,
+        epoch_length=args.epoch_length,
+    )
 
 
-def create_trainer(model, optimizer, metrics, args):
+def create_trainer(model, optimizer, args):
     def train_step(engine, batch):
         model.train()
 
@@ -187,33 +142,35 @@ def create_trainer(model, optimizer, metrics, args):
     # Configure default engine output logging.
     trainer.logger = setup_logger("trainer")
 
-    # Compute running averages of metrics during training.
+    # Compute running averages of training metrics.
+    metrics = training_metrics()
     for name, metric in metrics.items():
         running_average(metric).attach(trainer, name)
 
     return trainer
 
 
-def create_evaluator(model, metrics, args, name="evaluator"):
+def create_evaluator(model, args, name="evaluator"):
     @torch.no_grad()
     def eval_step(engine, batch):
-        # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
-        n_threads = torch.get_num_threads()
-        torch.set_num_threads(1)
-
         model.eval()
 
         images, targets = batch
         images = convert_tensor(images, device=args.device, non_blocking=False)
+
+        # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
+        n_threads = torch.get_num_threads()
+        torch.set_num_threads(1)
+
         outputs = model(images)
         outputs = convert_tensor(outputs, device="cpu")
 
-        # Save results in engine state.
+        # NOTE: Undo hack.
+        torch.set_num_threads(n_threads)
+
+        # Store results in engine state.
         results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
         engine.state.result = results
-
-        # NOTE: Undo hack above.
-        torch.set_num_threads(n_threads)
 
         return outputs
 
@@ -223,6 +180,18 @@ def create_evaluator(model, metrics, args, name="evaluator"):
     evaluator.logger = setup_logger(name)
 
     return evaluator
+
+
+def training_metrics():
+    metrics = {
+        "classifier": running_average("loss_classifier"),
+        "box_reg": running_average("loss_box_reg"),
+        "mask": running_average("loss_mask"),
+        "objectness": running_average("loss_objectness"),
+        "rpn_box_reg": running_average("loss_rpn_box_reg"),
+    }
+
+    return metrics
 
 
 def running_average(src: Union[Metric, Callable, str]):
