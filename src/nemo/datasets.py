@@ -50,9 +50,6 @@ class ObjectDataset(Dataset):
             image_size = tuple(round(d / scale_factor) for d in image_size)
             image = image.resize(image_size, resample=Image.NEAREST)
 
-        if self.transform:
-            image = self.transform(image)
-
         mask_image = Image.open(self.mask_files[idx])
         if scale_factor > 1:
             mask_image = mask_image.resize(image_size, resample=Image.NEAREST)
@@ -83,6 +80,8 @@ class ObjectDataset(Dataset):
             "iscrowd": torch.zeros(len(obj_ids), dtype=torch.int64),
         }
 
+        if self.transform:
+            image = self.transform(image)
         if self.target_transform:
             target = self.target_transform(target)
 
