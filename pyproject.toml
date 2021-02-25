@@ -28,14 +28,14 @@ torchvision = { version = "^0.8.1", optional = true }
 matplotlib = "^3.3.3"
 numpy = "^1.19.5"
 opencv-python-headless = "^4.5.1.48"
-pillow = "^7.2.0"
+pillow = "^8.1.0"
 pycocotools = "^2.0.2"
 pytorch-ignite = "^0.4.2"
 pyyaml = "^5.4.1"
 scikit-learn = "^0.23.2"
-scipy = "^1.6.0"
-tqdm = "^4.56.0"
-wandb = "^0.10.15"
+scipy = "^1.6.1"
+tqdm = "^4.57.0"
+wandb = "^0.10.20"
 
 [tool.poetry.extras]
 torch = ["torch", "torchvision"]
