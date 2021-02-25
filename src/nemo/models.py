@@ -78,6 +78,7 @@ def initialize_detector(num_classes, dropout_rate=0):
     # NOTE: See https://pytorch.org/docs/stable/torchvision/models.html#mask-r-cnn.
     model = vision.models.detection.maskrcnn_resnet50_fpn(
         pretrained=True,
+        trainable_backbone_layers=5,
         box_detections_per_img=256,
     )
 
