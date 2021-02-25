@@ -4,6 +4,7 @@ from pathlib import Path
 import cv2 as cv
 import torch
 
+from ignite.utils import convert_tensor
 from torchvision.transforms.functional import to_tensor
 
 from nemo.models import initialize_detector
@@ -50,15 +51,22 @@ def main(args):
     cv.imwrite(str(args.output_dir / args.image_file[0].name), result)
 
 
-def predict(image, model):
-    cv_image = cv.cvtColor(image.copy(), cv.COLOR_RGB2BGR)
-    image_tensor = to_tensor(image)
+def predict(image, model, device="cpu"):
+    # cv_image = cv.cvtColor(image.copy(), cv.COLOR_RGB2BGR)
+    cv_image = image.copy()
+    # image_tensor = torch.from_numpy(image)
+    image_tensor = to_tensor(image.copy())
+    image_tensor = convert_tensor(image_tensor, device=device)
 
     with torch.no_grad():
+        model.eval()
         output = model([image_tensor])
+        output = convert_tensor(output, device="cpu")
 
     top_predictions = select_top_predictions(output[0], 0.7)
-    result = cv_image.copy()
+
+    # result = cv_image.copy()
+    result = cv_image
     result = overlay_boxes(result, top_predictions)
     result = overlay_masks(result, top_predictions)
     result = overlay_class_names(result, top_predictions)
@@ -67,10 +75,12 @@ def predict(image, model):
 
 
 def select_top_predictions(predictions, threshold):
-    idx = (predictions["scores"] > threshold).nonzero().squeeze(1)
+    # idx = (predictions["scores"] > threshold).nonzero().squeeze(1)
+    idx = torch.nonzero(predictions["scores"] > threshold, as_tuple=False).squeeze(1)
     new_predictions = {}
     for k, v in predictions.items():
         new_predictions[k] = v[idx]
+
     return new_predictions
 
 
@@ -82,6 +92,7 @@ def compute_colors_for_labels(labels, palette=None):
         palette = torch.tensor([2**25 - 1, 2**15 - 1, 2**21 - 1])
     colors = labels[:, None] * palette
     colors = (colors % 255).numpy().astype("uint8")
+
     return colors
 
 
@@ -143,9 +154,6 @@ def overlay_class_names(image, predictions):
     labels = predictions["labels"].tolist()
     labels = [CATEGORIES[i] for i in labels]
     boxes = predictions['boxes']
-
-    print(type(image))
-    print(image)
 
     template = "{}: {:.2f}"
     for box, score, label in zip(boxes, scores, labels):
