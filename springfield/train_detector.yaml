@@ -15,9 +15,21 @@ spec:
         command:
         - python
         - src/train_detector.py
+        # I/O options.
+        - --data-dir=data/segmentation-resized/partitioned/combined
         - --output-dir=output/detection
-        - --num-workers=0
+        # Optimizer parameters.
+        - --optimizer=adam
+        - --learning-rate=1e-5
+        - --weight-decay=1e-4
+        # Learning rate scheduler parameters.
+        - --lr-step-size=5
+        - --lr-gamma=0.5
+        # Stochasticity parameters.
         - --seed=42
+        # Other options...
+        - --max-epochs=50
+        - --num-workers=0
         stdin: true
         tty: true
         envFrom:
@@ -26,14 +38,18 @@ spec:
         volumeMounts:
         - name: storage
           mountPath: /storage
-        - name: shm
-          mountPath: /dev/shm
+        # - name: shm
+        #   mountPath: /dev/shm
+        resources:
+          limits:
+            memory: 48Gi
+            cpu: 8000m
       volumes:
       - name: storage
         persistentVolumeClaim:
             claimName: storage
-      - name: shm
-        emptyDir:
-          medium: Memory
+      # - name: shm
+      #   emptyDir:
+      #     medium: Memory
       restartPolicy: OnFailure
   backoffLimit: 0
