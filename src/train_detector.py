@@ -3,20 +3,25 @@ from pathlib import Path
 from typing import Callable, Union
 from warnings import catch_warnings, filterwarnings
 
+import numpy as np
 import torch
 import torch.optim as optim
+import wandb
 
+from ignite.contrib.engines.common import setup_wandb_logging
 from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torchvision.transforms import Compose, ToTensor
+from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import ObjectDataset
 from nemo.models import initialize_detector
 from nemo.utils import ensure_reproducibility, timestamp_path
 from nemo.vendor.torchvision.coco_eval import CocoEvaluator
 from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
+from visualize_detector import predict
 
 DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
 
@@ -54,7 +59,10 @@ def main(args):
     )
 
     print("Making coco_gt...")
-    coco_gt = convert_to_coco_api(test_dataset)
+    if args.dev_mode:
+        coco_gt = convert_to_coco_api(Subset(test_dataset, [0]))
+    else:
+        coco_gt = convert_to_coco_api(test_dataset)
     print("DONE!!!!!")
 
     # Number of classes/categories is equal to object classes + "background" class.
@@ -63,10 +71,30 @@ def main(args):
     # Prepare model and optimizer.
     model = initialize_detector(num_classes, args.dropout_rate)
     model = model.to(device=args.device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    optimizer, lr_scheduler = initialize_optimizer(model, args)
 
     trainer = create_trainer(model, optimizer, args)
     evaluator = create_evaluator(model, args)
+
+    wandb_mode = "offline" if args.dev_mode else None
+    wandb_logger = setup_wandb_logging(
+        trainer=trainer,
+        optimizers=optimizer,
+        evaluators=evaluator,
+        log_every_iters=args.log_interval,
+        # kwargs...
+        dir=args.output_dir,
+        mode=wandb_mode,
+        config=args,
+        config_exclude_keys=["dev_mode"],
+        group="detector",
+    )
+
+    if lr_scheduler is not None:
+        trainer.add_event_handler(
+            Events.EPOCH_COMPLETED,
+            lambda: lr_scheduler.step(),
+        )
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def save_model(engine: Engine):
@@ -101,23 +129,72 @@ def main(args):
 
     @evaluator.on(Events.ITERATION_COMPLETED)
     def update_coco_evaluator(engine: Engine):
-        engine.state.coco_evaluator.update(engine.state.results)
+        engine.state.coco_evaluator.update(engine.state.result)
 
     @evaluator.on(Events.COMPLETED)
     def log_coco_evaluator(engine: Engine):
-        engine.state.coco_evaluator.coco_evaluator.synchronize_between_processes()
-        engine.state.coco_evaluator.coco_evaluator.accumulate()
-        engine.state.coco_evaluator.coco_evaluator.summarize()
+        engine.state.coco_evaluator.synchronize_between_processes()
+        engine.state.coco_evaluator.accumulate()
+        engine.state.coco_evaluator.summarize()
 
-    @evaluator.on(Events.EPOCH_COMPLETED)
+    @evaluator.on(Events.STARTED)
+    def prepare_mask_images(engine: Engine):
+        engine.state.result_images = []
+
+    @evaluator.on(Events.ITERATION_COMPLETED)
     def visualize_masks(engine: Engine):
-        pass
+        images, _ = engine.state.batch
+        image = np.asarray(to_pil_image(images[0]))
+        # image = images[0].cpu().numpy()
+        result_image, _, _ = predict(image, model, device=args.device)
+        engine.state.result_images.append(result_image)
+
+    @evaluator.on(Events.COMPLETED)
+    def log_masked_images(engine: Engine):
+        images = engine.state.result_images[:10]
+        wandb_logger.log({"images": [wandb.Image(img) for img in images]}, step=trainer.state.iteration)
 
     trainer.run(
         dataloader,
         max_epochs=args.max_epochs,
         epoch_length=args.epoch_length,
     )
+
+
+def initialize_optimizer(model, args):
+    parameters = filter(lambda p: p.requires_grad, model.parameters())
+    # parameters = model.parameters()
+
+    # NOTE: Sometimes useful for debugging...
+    # for name, param in model.named_parameters():
+    #     print(f"{name}: {param.requires_grad}")
+
+    if args.optimizer == "adam":
+        optimizer = optim.Adam(
+            parameters,
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
+        )
+    elif args.optimizer == "sgd":
+        optimizer = optim.SGD(
+            parameters,
+            lr=args.learning_rate,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
+        )
+    else:
+        # NOTE: This should never happen when using argparse.
+        raise NotImplementedError("Unsupported optimizer: {}".format(args.optimizer))
+
+    lr_scheduler = initialize_lr_scheduler(optimizer, args)
+    return optimizer, lr_scheduler
+
+
+def initialize_lr_scheduler(optimizer, args):
+    if args.lr_step_size is not None:
+        return optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
+
+    return None
 
 
 def create_trainer(model, optimizer, args):
@@ -159,14 +236,14 @@ def create_evaluator(model, args, name="evaluator"):
         images = convert_tensor(images, device=args.device, non_blocking=False)
 
         # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
-        n_threads = torch.get_num_threads()
-        torch.set_num_threads(1)
+        # n_threads = torch.get_num_threads()
+        # torch.set_num_threads(1)
 
         outputs = model(images)
         outputs = convert_tensor(outputs, device="cpu")
 
         # NOTE: Undo hack.
-        torch.set_num_threads(n_threads)
+        # torch.set_num_threads(n_threads)
 
         # Store results in engine state.
         results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
@@ -214,13 +291,29 @@ def collate_fn(batch):
 
 def parse_args():
     parser = ArgumentParser()
+
+    # I/O options.
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR, metavar="PATH", help="path to dataset directory")
     parser.add_argument("--output-dir", type=Path, required=True, metavar="PATH", help="path to output directory")
+
+    # Optimizer parameters.
+    parser.add_argument("--optimizer", type=str, default="adam", choices=["adam", "sgd"], metavar="NAME", help="optimizer to use for training")
+    parser.add_argument("--learning-rate", type=float, default=1e-5, metavar="NUM", help="initial learning rate")
+    parser.add_argument("--momentum", type=float, default=0, metavar="NUM", help="optimizer momentum; only used by some optimizers")
+    parser.add_argument("--weight-decay", type=float, default=0, metavar="NUM", help="weight decay; only used by some optimizers")
+
+    # Learning rate scheduler parameters.
+    parser.add_argument("--lr-step-size", type=int, metavar="NUM", help="number of epochs per learning rate decay period")
+    parser.add_argument("--lr-gamma", type=float, metavar="NUM", help="learning rate decay factor")
+
+    # Stochasticity parameters.
     parser.add_argument("--dropout-rate", type=float, default=0, metavar="NUM", help="dropout probability for stochastic sampling")
+    parser.add_argument("--seed", type=int, metavar="NUM", help="random state seed")
+
+    # Other options...
+    parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
-    parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
-    parser.add_argument("--seed", type=int, metavar="NUM", help="random state seed")
     parser.add_argument("--dev-mode", action="store_true", help="run each model phase with only one batch")
 
     return parser.parse_args()
