@@ -25,6 +25,13 @@ from visualize_detector import predict
 
 DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
 
+CLASS_COLORS = [
+    [215, 25, 28],  # agglutinated
+    [253, 174, 97],  # benthic
+    [171, 217, 233],  # planktic
+    [44, 123, 182],  # sediment
+]
+
 
 def main(args):
     # Use fixed random seed if requested.
