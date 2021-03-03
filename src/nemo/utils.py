@@ -7,6 +7,7 @@ from types import ModuleType
 from warnings import filterwarnings
 
 import numpy
+import yaml
 import torch
 
 
@@ -45,6 +46,11 @@ def timestamp_path(path: Path):
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     new_path = path.parent / timestamp / path.name if path.is_file() else path / timestamp
     return new_path
+
+
+def read_config(path: Path):
+    with path.open(mode="r") as f:
+        return yaml.load(f)
 
 
 # NOTE: Stolen from https://stackoverflow.com/a/33295456/57858.

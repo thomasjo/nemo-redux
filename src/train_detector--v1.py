@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-from functools import reduce
 from pathlib import Path
 from typing import Callable, Union
 from warnings import catch_warnings, filterwarnings
@@ -9,7 +8,10 @@ import torch
 import torch.optim as optim
 import wandb
 
-from ignite.utils import setup_logger
+from ignite.contrib.engines.common import setup_wandb_logging
+from ignite.engine import Engine, Events
+from ignite.metrics import Metric, RunningAverage
+from ignite.utils import convert_tensor, setup_logger
 from torch.utils.data import DataLoader, Subset
 from torchvision.transforms import Compose, ToTensor
 from torchvision.transforms.functional import to_pil_image
@@ -45,25 +47,13 @@ def main(args):
     args.max_epochs = 1 if args.dev_mode else args.max_epochs
     args.epoch_length = 1 if args.dev_mode else None
 
-    # Initalize tracked W&B run.
-    wandb_mode = "offline" if args.dev_mode else None
-    wandb.init(
-        mode=wandb_mode,
-        dir=args.output_dir,
-        config=args,
-        config_exclude_keys=["dev_mode"],
-        group="detector",
-    )
-
-    config = wandb.config
-
     dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
     dataloader = DataLoader(
         dataset,
         batch_size=1,
         shuffle=True,
         collate_fn=collate_fn,
-        num_workers=config.num_workers,
+        num_workers=args.num_workers,
     )
 
     test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
@@ -72,7 +62,7 @@ def main(args):
         batch_size=1,
         shuffle=False,
         collate_fn=collate_fn,
-        num_workers=config.num_workers,
+        num_workers=args.num_workers,
     )
 
     print("Making coco_gt...")
@@ -86,120 +76,96 @@ def main(args):
     num_classes = len(dataset.classes) + 1
 
     # Prepare model and optimizer.
-    model = initialize_detector(num_classes, config.dropout_rate)
-    model = model.to(device=config.device)
-    optimizer, scheduler = initialize_optimizer(model, config)
+    model = initialize_detector(num_classes, args.dropout_rate)
+    model = model.to(device=args.device)
+    optimizer, lr_scheduler = initialize_optimizer(model, args)
 
-    # Iterate over epochs.
-    for epoch in range(1, config.max_epochs + 1):
-        wandb.log({"epoch": epoch}, commit=False)
-        train_one_epoch(model, optimizer, dataloader, config)
-        evaluate(model, test_dataloader, coco_gt)
+    trainer = create_trainer(model, optimizer, args)
+    evaluator = create_evaluator(model, args)
 
-        if scheduler is not None:
-            scheduler.step()
+    wandb_mode = "offline" if args.dev_mode else None
+    wandb_logger = setup_wandb_logging(
+        trainer=trainer,
+        optimizers=optimizer,
+        evaluators=evaluator,
+        log_every_iters=args.log_interval,
+        # kwargs...
+        dir=args.output_dir,
+        mode=wandb_mode,
+        config=args,
+        config_exclude_keys=["dev_mode"],
+        group="detector",
+    )
 
-    # @trainer.on(Events.EPOCH_COMPLETED)
-    def save_model(engine):
-        ckpt_file = config.output_dir / f"ckpt-{engine.state.epoch:02d}.pt"
+    if lr_scheduler is not None:
+        trainer.add_event_handler(
+            Events.EPOCH_COMPLETED,
+            lambda: lr_scheduler.step(),
+        )
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def save_model(engine: Engine):
+        ckpt_file = args.output_dir / f"ckpt-{engine.state.epoch:02d}.pt"
         torch.save({
             "epoch": engine.state.epoch,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
-            "dropout_rate": config.dropout_rate,
+            "dropout_rate": args.dropout_rate,
             "num_classes": num_classes,
         }, ckpt_file)
 
-    # @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
-    def log_training_step(engine):
+    @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
+    def log_training_step(engine: Engine):
         engine.logger.info(engine.state.metrics)
 
-    # @evaluator.on(Events.STARTED)
-    def prepare_coco_evaluator(engine):
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def run_evaluator(engine: Engine):
+        # Development mode overrides.
+        max_epochs = args.max_epochs if args.dev_mode else None
+        epoch_length = args.epoch_length if args.dev_mode else None
+        evaluator.run(
+            test_dataloader,
+            max_epochs=max_epochs,
+            epoch_length=epoch_length,
+        )
+
+    @evaluator.on(Events.STARTED)
+    def prepare_coco_evaluator(engine: Engine):
         iou_types = ["bbox", "segm"]
         engine.state.coco_evaluator = CocoEvaluator(coco_gt, iou_types)
 
-    # @evaluator.on(Events.ITERATION_COMPLETED)
-    def update_coco_evaluator(engine):
+    @evaluator.on(Events.ITERATION_COMPLETED)
+    def update_coco_evaluator(engine: Engine):
         engine.state.coco_evaluator.update(engine.state.result)
 
-    # @evaluator.on(Events.COMPLETED)
-    def log_coco_evaluator(engine):
+    @evaluator.on(Events.COMPLETED)
+    def log_coco_evaluator(engine: Engine):
         engine.state.coco_evaluator.synchronize_between_processes()
         engine.state.coco_evaluator.accumulate()
         engine.state.coco_evaluator.summarize()
 
-    # @evaluator.on(Events.STARTED)
-    def prepare_mask_images(engine):
+    @evaluator.on(Events.STARTED)
+    def prepare_mask_images(engine: Engine):
         engine.state.result_images = []
 
-    # @evaluator.on(Events.ITERATION_COMPLETED)
-    def visualize_masks(engine):
+    @evaluator.on(Events.ITERATION_COMPLETED)
+    def visualize_masks(engine: Engine):
         images, _ = engine.state.batch
         image = np.asarray(to_pil_image(images[0]))
         # image = images[0].cpu().numpy()
         result_image, _, _ = predict(image, model, device=args.device)
         engine.state.result_images.append(result_image)
 
-    # @evaluator.on(Events.COMPLETED)
-    def log_masked_images(engine):
+    @evaluator.on(Events.COMPLETED)
+    def log_masked_images(engine: Engine):
         images = engine.state.result_images[:10]
-        wandb.log({"images": [wandb.Image(img) for img in images]})
+        wandb_logger.log({"images": [wandb.Image(img) for img in images]}, step=trainer.state.iteration)
 
-
-def train_one_epoch(model, optimizer, dataloader, config):
-    model.train()
-
-    # Reset running metrics.
-    # Update running metrics.
-    # WANDB: Log running metrics.
-
-    all_loss_dicts = []
-
-    # Iterate over dataset.
-    # for step, batch in enumerate(dataloader, start=1):
-    for step, batch in zip(range(1, config.epoch_length + 1), dataloader):
-        images, targets = batch
-        images = [image.to(device=config.device) for image in images]
-        targets = [{k: v.to(device=config.device) for k, v in t.items()} for t in targets]
-
-        loss_dict = model(images, targets)
-        batch_loss = sum(loss_dict.values())
-
-        # Log batch loss.
-        wandb.log({"batchloss": batch_loss.item()})
-        print(batch_loss.item())
-
-        optimizer.zero_grad()
-        batch_loss.backward()
-        optimizer.step()
-
-        # We only need the scalar values.
-        loss_values = {k: v.item() for k, v in loss_dict.items()}
-        all_loss_dicts.append(loss_values)
-
-    loss_dict = reduce_losses(all_loss_dicts)
-    print(loss_dict)
-
-    return loss_dict
-
-
-@torch.no_grad()
-def reduce_losses(losses):
-    summed_losses = reduce(lambda a, b: {k: a[k] + b[k] for k in a}, losses, dict.fromkeys(losses[0], 0.0))
-    average_losses = {k: v / len(losses) for k, v in summed_losses.items()}
-
-    return average_losses
-
-
-def evaluate(model, dataloader, coco_gt):
-    # Initialize COCO evaluator.
-    # Iterate over dataset.
-    #   Update COCO evaluator.
-    #   Visualize results for N images.  [every K epochs?]
-    #   WANDB: Log COCO metrics.
-    #   WANDB: Log visual results.  [every K epochs?]
-    pass
+    trainer.run(
+        dataloader,
+        max_epochs=args.max_epochs,
+        epoch_length=args.epoch_length,
+    )
 
 
 def initialize_optimizer(model, args):
@@ -238,87 +204,90 @@ def initialize_lr_scheduler(optimizer, args):
     return None
 
 
-# def create_evaluator(model, args, name="evaluator"):
-#     @torch.no_grad()
-#     def eval_step(engine, batch):
-#         model.eval()
+def create_trainer(model, optimizer, args):
+    def train_step(engine, batch):
+        model.train()
 
-#         images, targets = batch
-#         # images = convert_tensor(images, device=args.device, non_blocking=False)
+        images, targets = convert_tensor(batch, device=args.device, non_blocking=False)
+        loss_dict = model(images, targets)
+        losses = sum(loss_dict.values())
 
-#         # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
-#         # n_threads = torch.get_num_threads()
-#         # torch.set_num_threads(1)
+        optimizer.zero_grad()
+        losses.backward()
+        optimizer.step()
 
-#         outputs = model(images)
-#         # outputs = convert_tensor(outputs, device="cpu")
+        # We only need the scalar values.
+        loss_values = {k: v.item() for k, v in loss_dict.items()}
 
-#         # NOTE: Undo hack.
-#         # torch.set_num_threads(n_threads)
+        return loss_values
 
-#         # Store results in engine state.
-#         results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
-#         engine.state.result = results
+    trainer = Engine(train_step)
 
-#         return outputs
+    # Configure default engine output logging.
+    trainer.logger = setup_logger("trainer")
 
-#     # evaluator = Engine(eval_step)
+    # Compute running averages of training metrics.
+    metrics = training_metrics()
+    for name, metric in metrics.items():
+        running_average(metric).attach(trainer, name)
 
-#     # Configure default engine output logging.
-#     # evaluator.logger = setup_logger(name)
-
-#     return evaluator
+    return trainer
 
 
-class RunningAverage:
-    def __init__(self, num_channels=3):
-        self.num_channels = 3
-        self.average = torch.zeros(num_channels)
-        self.num_samples = 0
+def create_evaluator(model, args, name="evaluator"):
+    @torch.no_grad()
+    def eval_step(engine, batch):
+        model.eval()
 
-    def update(self, values):
-        batch_size, num_channels = values.size()
+        images, targets = batch
+        images = convert_tensor(images, device=args.device, non_blocking=False)
 
-        if num_channels != self.num_channels:
-            raise RuntimeError("num_channels mismatch")
+        # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
+        # n_threads = torch.get_num_threads()
+        # torch.set_num_threads(1)
 
-        updated_num_samples = self.num_samples + batch_size
-        correction_factor = self.num_samples / updated_num_samples
+        outputs = model(images)
+        outputs = convert_tensor(outputs, device="cpu")
 
-        updated_average = self.average * correction_factor
-        updated_average += torch.sum(values, dim=0) / updated_num_samples
+        # NOTE: Undo hack.
+        # torch.set_num_threads(n_threads)
 
-        self.average = updated_average
-        self.num_samples = updated_num_samples
+        # Store results in engine state.
+        results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
+        engine.state.result = results
 
-    def tolist(self):
-        return self.average.detach().tolist()
+        return outputs
 
-    def __str__(self):
-        return "[" + ", ".join([f"{value:.3f}" for value in self.tolist()]) + "]"
+    evaluator = Engine(eval_step)
+
+    # Configure default engine output logging.
+    evaluator.logger = setup_logger(name)
+
+    return evaluator
 
 
-# def training_metrics():
-#     metrics = {
-#         "classifier": running_average("loss_classifier"),
-#         "box_reg": running_average("loss_box_reg"),
-#         "mask": running_average("loss_mask"),
-#         "objectness": running_average("loss_objectness"),
-#         "rpn_box_reg": running_average("loss_rpn_box_reg"),
-#     }
+def training_metrics():
+    metrics = {
+        "classifier": running_average("loss_classifier"),
+        "box_reg": running_average("loss_box_reg"),
+        "mask": running_average("loss_mask"),
+        "objectness": running_average("loss_objectness"),
+        "rpn_box_reg": running_average("loss_rpn_box_reg"),
+    }
 
-#     return metrics
+    return metrics
 
-# def running_average(src: Union[Metric, Callable, str]):
-#     if isinstance(src, Metric):
-#         return RunningAverage(src)
-#     elif isinstance(src, Callable):
-#         return RunningAverage(output_transform=src)
-#     elif isinstance(src, str):
-#         # TODO: Handle the scenario where output[src] is a Tensor; return .item() value somehow.
-#         return running_average(lambda output: output[src])
 
-#     raise TypeError("unsupported metric type: {}".format(type(src)))
+def running_average(src: Union[Metric, Callable, str]):
+    if isinstance(src, Metric):
+        return RunningAverage(src)
+    elif isinstance(src, Callable):
+        return RunningAverage(output_transform=src)
+    elif isinstance(src, str):
+        # TODO: Handle the scenario where output[src] is a Tensor; return .item() value somehow.
+        return running_average(lambda output: output[src])
+
+    raise TypeError("unsupported metric type: {}".format(type(src)))
 
 
 # TODO(thomasjo): Rename to something more descriptive.

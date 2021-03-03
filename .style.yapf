@@ -2,3 +2,4 @@
 based_on_style = pep8
 column_limit = 200
 split_before_arithmetic_operator = true
+; blank_lines_between_top_level_imports_and_variables = 2
