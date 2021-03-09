@@ -182,10 +182,6 @@ def initialize_optimizer(model, args):
     parameters = filter(lambda p: p.requires_grad, model.parameters())
     # parameters = model.parameters()
 
-    # NOTE: Sometimes useful for debugging...
-    # for name, param in model.named_parameters():
-    #     print(f"{name}: {param.requires_grad}")
-
     if args.optimizer == "adam":
         optimizer = optim.Adam(
             parameters,
