@@ -123,6 +123,8 @@ def main(args):
     def run_evaluator(engine: Engine):
         evaluator.run(test_dataloader)
 
+    # COCO evaluation scores.
+    # -----------------------
     @evaluator.on(Events.STARTED)
     def prepare_coco_evaluator(engine: Engine):
         iou_types = ["bbox", "segm"]
@@ -134,10 +136,13 @@ def main(args):
 
     @evaluator.on(Events.COMPLETED)
     def log_coco_evaluator(engine: Engine):
-        engine.state.coco_evaluator.synchronize_between_processes()
-        engine.state.coco_evaluator.accumulate()
-        engine.state.coco_evaluator.summarize()
-        # TODO: Extract and log relevant mAP scores...
+        with redirect_output():
+            engine.state.coco_evaluator.synchronize_between_processes()
+            engine.state.coco_evaluator.accumulate()
+            engine.state.coco_evaluator.summarize()
+        coco_scores = prepare_coco_scores(engine.state.coco_evaluator)
+        wandb_logger.log(coco_scores, step=trainer.state.iteration)
+        del engine.state.coco_evaluator
 
     @evaluator.on(Events.STARTED)
     def prepare_mask_images(engine: Engine):
@@ -289,12 +294,17 @@ def collate_fn(batch):
     return list(images), list(targets)
 
 
-def initialize_coco_api(dataset, args):
-    if args.dev_mode:
-        dataset = Subset(dataset, [0])
+def prepare_coco_scores(coco_evaluator: CocoEvaluator, tag="validation"):
+    scores = {}
+    for iou_type, coco_eval in coco_evaluator.coco_eval.items():
+        scores.update({
+            f"{tag}/{iou_type}_ap": coco_eval.stats[0],
+            f"{tag}/{iou_type}_ap50": coco_eval.stats[0],
+            f"{tag}/{iou_type}_ap75": coco_eval.stats[0],
+            f"{tag}/{iou_type}_ar": coco_eval.stats[0],
+        })
 
-    coco_api = convert_to_coco_api(dataset)
-    return coco_api
+    return scores
 
 
 def parse_args():
