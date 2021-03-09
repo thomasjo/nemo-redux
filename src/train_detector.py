@@ -67,12 +67,7 @@ def main(args):
         prefetch_factor=1,
     )
 
-    print("Making coco_gt...")
-    if args.dev_mode:
-        coco_gt = convert_to_coco_api(Subset(test_dataset, [0]))
-    else:
-        coco_gt = convert_to_coco_api(test_dataset)
-    print("DONE!!!!!")
+    coco_gt = initialize_coco_api(test_dataset, args)
 
     # Number of classes/categories is equal to object classes + "background" class.
     num_classes = len(dataset.classes) + 1
@@ -296,6 +291,14 @@ def running_average(src: Union[Metric, Callable, str]):
 def collate_fn(batch):
     images, targets = zip(*batch)
     return list(images), list(targets)
+
+
+def initialize_coco_api(dataset, args):
+    if args.dev_mode:
+        dataset = Subset(dataset, [0])
+
+    coco_api = convert_to_coco_api(dataset)
+    return coco_api
 
 
 def parse_args():
