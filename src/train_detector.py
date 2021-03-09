@@ -18,7 +18,7 @@ from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import ObjectDataset
 from nemo.models import initialize_detector
-from nemo.utils import ensure_reproducibility, timestamp_path
+from nemo.utils import ensure_reproducibility, redirect_output, timestamp_path
 from nemo.vendor.torchvision.coco_eval import CocoEvaluator
 from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
 from visualize_detector import predict
@@ -68,10 +68,10 @@ def main(args):
         shuffle=False,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        prefetch_factor=1,
     )
 
-    coco_gt = convert_to_coco_api(test_dataset)
+    with redirect_output():
+        coco_gt = convert_to_coco_api(test_dataset)
 
     # Prepare model and optimizer.
     model = initialize_detector(num_classes, args.dropout_rate)

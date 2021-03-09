@@ -1,6 +1,7 @@
+import os
 import random
 
-from contextlib import ContextDecorator
+from contextlib import ContextDecorator, contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType
@@ -45,6 +46,12 @@ def timestamp_path(path: Path):
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     new_path = path.parent / timestamp / path.name if path.is_file() else path / timestamp
     return new_path
+
+
+@contextmanager
+def redirect_output(new_target=os.devnull):
+    with open(new_target, mode="w") as f, redirect_stdout(f) as stdout, redirect_stderr(f) as stderr:
+        yield (stdout, stderr)
 
 
 # NOTE: Stolen from https://stackoverflow.com/a/33295456/57858.
