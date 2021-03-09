@@ -24,6 +24,7 @@ from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
 from visualize_detector import predict
 
 DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
+DEV_MODE_BATCHES = 2
 
 CLASS_COLORS = [
     [215, 25, 28],  # agglutinated
@@ -43,13 +44,17 @@ def main(args):
     args.output_dir.mkdir(parents=True)
 
     # Development mode overrides.
-    args.log_interval = 1 if args.dev_mode else 10
-    args.max_epochs = 1 if args.dev_mode else args.max_epochs
-    args.epoch_length = 1 if args.dev_mode else None
+    args.log_interval = 1 if args.dev_mode else args.log_interval
+    args.max_epochs = 2 if args.dev_mode else args.max_epochs
 
-    dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
-    dataloader = DataLoader(
-        dataset,
+    train_dataset, test_dataset, num_classes = initialize_datasets(args)
+
+    if args.dev_mode:
+        train_dataset = Subset(train_dataset, indices=range(DEV_MODE_BATCHES))
+        test_dataset = Subset(test_dataset, indices=range(DEV_MODE_BATCHES))
+
+    train_dataloader = DataLoader(
+        train_dataset,
         batch_size=1,
         shuffle=True,
         collate_fn=collate_fn,
@@ -57,7 +62,6 @@ def main(args):
         prefetch_factor=1,
     )
 
-    test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=1,
@@ -67,10 +71,7 @@ def main(args):
         prefetch_factor=1,
     )
 
-    coco_gt = initialize_coco_api(test_dataset, args)
-
-    # Number of classes/categories is equal to object classes + "background" class.
-    num_classes = len(dataset.classes) + 1
+    coco_gt = convert_to_coco_api(test_dataset)
 
     # Prepare model and optimizer.
     model = initialize_detector(num_classes, args.dropout_rate)
@@ -117,14 +118,7 @@ def main(args):
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def run_evaluator(engine: Engine):
-        # Development mode overrides.
-        max_epochs = args.max_epochs if args.dev_mode else None
-        epoch_length = args.epoch_length if args.dev_mode else None
-        evaluator.run(
-            test_dataloader,
-            max_epochs=max_epochs,
-            epoch_length=epoch_length,
-        )
+        evaluator.run(test_dataloader)
 
     @evaluator.on(Events.STARTED)
     def prepare_coco_evaluator(engine: Engine):
@@ -158,11 +152,17 @@ def main(args):
         images = engine.state.result_images[:10]
         wandb_logger.log({"images": [wandb.Image(img) for img in images]}, step=trainer.state.iteration)
 
-    trainer.run(
-        dataloader,
-        max_epochs=args.max_epochs,
-        epoch_length=args.epoch_length,
-    )
+    # Start training procedure...
+    trainer.run(train_dataloader, max_epochs=args.max_epochs)
+
+
+def initialize_datasets(args):
+    dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
+    test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
+
+    num_classes = len(dataset.classes) + 1  # add "background" class
+
+    return dataset, test_dataset, num_classes
 
 
 def initialize_optimizer(model, args):
