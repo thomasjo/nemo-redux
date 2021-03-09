@@ -111,6 +111,10 @@ def main(args):
             "num_classes": num_classes,
         }, ckpt_file)
 
+    @trainer.on(Events.EPOCH_STARTED)
+    def log_epoch(engine: Engine):
+        wandb_logger.log({"epoch": engine.state.epoch}, commit=False)
+
     @trainer.on(Events.ITERATION_COMPLETED(every=args.log_interval))
     def log_training_step(engine: Engine):
         engine.logger.info(engine.state.metrics)
