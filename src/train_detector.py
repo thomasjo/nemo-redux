@@ -140,6 +140,7 @@ def main(args):
         engine.state.coco_evaluator.synchronize_between_processes()
         engine.state.coco_evaluator.accumulate()
         engine.state.coco_evaluator.summarize()
+        # TODO: Extract and log relevant mAP scores...
 
     @evaluator.on(Events.STARTED)
     def prepare_mask_images(engine: Engine):
