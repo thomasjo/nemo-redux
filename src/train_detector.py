@@ -239,15 +239,8 @@ def create_evaluator(model, args, name="evaluator"):
         images, targets = batch
         images = convert_tensor(images, device=args.device, non_blocking=False)
 
-        # HACK: https://github.com/pytorch/vision/blob/3b19d6fc0f47280f947af5cebb83827d0ce93f7d/references/detection/engine.py#L72-L75
-        # n_threads = torch.get_num_threads()
-        # torch.set_num_threads(1)
-
         outputs = model(images)
         outputs = convert_tensor(outputs, device="cpu")
-
-        # NOTE: Undo hack.
-        # torch.set_num_threads(n_threads)
 
         # Store results in engine state.
         results = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
