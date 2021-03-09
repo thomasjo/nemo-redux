@@ -25,6 +25,7 @@ from visualize_detector import predict
 
 DEFAULT_DATA_DIR = Path("data/segmentation-resized/partitioned/combined")
 DEV_MODE_BATCHES = 2
+MAX_MASK_IMAGES = 10
 
 CLASS_COLORS = [
     [215, 25, 28],  # agglutinated
@@ -144,21 +145,25 @@ def main(args):
         wandb_logger.log(coco_scores, step=trainer.state.iteration)
         del engine.state.coco_evaluator
 
+    # Mask image visualization.
+    # -------------------------
     @evaluator.on(Events.STARTED)
     def prepare_mask_images(engine: Engine):
         engine.state.result_images = []
 
     @evaluator.on(Events.ITERATION_COMPLETED)
     def visualize_masks(engine: Engine):
-        images, _ = engine.state.batch
-        image = np.asarray(to_pil_image(images[0]))
-        result_image, _, _ = predict(image, model, device=args.device)
-        engine.state.result_images.append(result_image)
+        if len(engine.state.result_images) < MAX_MASK_IMAGES:
+            images, _ = engine.state.batch
+            image = np.asarray(to_pil_image(images[0]))
+            result_image, _, _ = predict(image, model, device=args.device)
+            engine.state.result_images.append(result_image)
 
     @evaluator.on(Events.COMPLETED)
     def log_masked_images(engine: Engine):
-        images = engine.state.result_images[:10]
+        images = engine.state.result_images[:MAX_MASK_IMAGES]
         wandb_logger.log({"images": [wandb.Image(img) for img in images]}, step=trainer.state.iteration)
+        del engine.state.result_images
 
     # Start training procedure...
     trainer.run(train_dataloader, max_epochs=args.max_epochs)
