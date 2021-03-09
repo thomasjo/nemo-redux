@@ -150,7 +150,6 @@ def main(args):
     def visualize_masks(engine: Engine):
         images, _ = engine.state.batch
         image = np.asarray(to_pil_image(images[0]))
-        # image = images[0].cpu().numpy()
         result_image, _, _ = predict(image, model, device=args.device)
         engine.state.result_images.append(result_image)
 
