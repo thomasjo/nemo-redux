@@ -54,6 +54,7 @@ def main(args):
         shuffle=True,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
+        prefetch_factor=1,
     )
 
     test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
@@ -63,6 +64,7 @@ def main(args):
         shuffle=False,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
+        prefetch_factor=1,
     )
 
     print("Making coco_gt...")
