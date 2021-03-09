@@ -23,7 +23,7 @@ from nemo.vendor.torchvision.coco_eval import CocoEvaluator
 from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
 from visualize_detector import predict
 
-DEFAULT_DATA_DIR = Path("data/segmentation/partitioned/combined")
+DEFAULT_DATA_DIR = Path("data/segmentation-resized/partitioned/combined")
 DEV_MODE_BATCHES = 2
 
 CLASS_COLORS = [
