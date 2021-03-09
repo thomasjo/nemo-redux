@@ -59,7 +59,6 @@ def main(args):
         shuffle=True,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
-        prefetch_factor=1,
     )
 
     test_dataloader = DataLoader(
