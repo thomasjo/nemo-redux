@@ -14,7 +14,7 @@ packages = [{ include = "nemo", from = "src" }]
 [tool.poetry.dev-dependencies]
 flake8 = "^3.8.4"
 flake8-isort = "^4.0.0"
-isort = { version = "^4.3.21", extras = ["pyproject"] }
+isort = "^5.7.0"
 rope = "^0.17.0"
 yapf = "^0.30.0"
 
