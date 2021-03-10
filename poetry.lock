@@ -570,7 +570,7 @@ torch = ["torch", "torchvision"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "3fe0aedcc2459f77d4004ecd4de83c65b5fe4403b986c1e74bb48ae231e1fceb"
+content-hash = "79e9795aafe78e7d96123f7faae89184d58169c4cef177d3ae8789eaaffdf4ff"
 
 [metadata.files]
 certifi = [
