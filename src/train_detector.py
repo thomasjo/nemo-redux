@@ -300,9 +300,9 @@ def prepare_coco_scores(coco_evaluator: CocoEvaluator, tag="validation"):
     for iou_type, coco_eval in coco_evaluator.coco_eval.items():
         scores.update({
             f"{tag}/{iou_type}_ap": coco_eval.stats[0],
-            f"{tag}/{iou_type}_ap50": coco_eval.stats[0],
-            f"{tag}/{iou_type}_ap75": coco_eval.stats[0],
-            f"{tag}/{iou_type}_ar": coco_eval.stats[0],
+            f"{tag}/{iou_type}_ap50": coco_eval.stats[1],
+            f"{tag}/{iou_type}_ap75": coco_eval.stats[2],
+            f"{tag}/{iou_type}_ar": coco_eval.stats[8],
         })
 
     return scores
