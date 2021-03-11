@@ -331,6 +331,7 @@ def parse_args():
 
     # Other options...
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
+    parser.add_argument("--log-interval", type=int, metavar="NUM", default=10, help="frequency of training step logging")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
     parser.add_argument("--dev-mode", action="store_true", help="run each model phase with only one batch")
