@@ -16,14 +16,13 @@ from nemo.transforms import RandomDiscreteRotation
 
 
 class ObjectDataset(Dataset):
-    def __init__(self, root_dir, transform=None, target_transform=None, max_image_size=2000):
+    def __init__(self, root_dir, transform=None, max_image_size=2000):
         super().__init__()
 
         if not isinstance(root_dir, Path):
             root_dir = Path(root_dir)
 
         self.transform = transform
-        self.target_transform = target_transform
         self.max_image_size = max_image_size
 
         self.annotations = self.load_annotations(root_dir)
@@ -81,9 +80,7 @@ class ObjectDataset(Dataset):
         }
 
         if self.transform:
-            image = self.transform(image)
-        if self.target_transform:
-            target = self.target_transform(target)
+            image, target = self.transform(image, target)
 
         return image, target
 
