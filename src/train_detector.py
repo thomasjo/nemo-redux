@@ -13,11 +13,11 @@ from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
 from torch.utils.data import DataLoader, Subset
-from torchvision.transforms import Compose, ToTensor
 from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import ObjectDataset
 from nemo.models import initialize_detector
+from nemo.transforms import ColorJitter, Compose, GammaJitter, RandomHorizontalFlip, RandomVerticalFlip, ToTensor
 from nemo.utils import ensure_reproducibility, redirect_output, timestamp_path
 from nemo.vendor.torchvision.coco_eval import CocoEvaluator
 from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
@@ -171,12 +171,22 @@ def main(args):
 
 
 def initialize_datasets(args):
-    dataset = ObjectDataset(args.data_dir / "train", transform=Compose([ToTensor()]))
-    test_dataset = ObjectDataset(args.data_dir / "test", transform=Compose([ToTensor()]))
+    transform = Compose([ToTensor()])
 
-    num_classes = len(dataset.classes) + 1  # add "background" class
+    train_transform = Compose([
+        RandomHorizontalFlip(),
+        RandomVerticalFlip(),
+        GammaJitter(gamma=0.2),
+        ColorJitter(brightness=0.1, contrast=0.1, saturation=0.01, hue=0.01),
+        ToTensor(),
+    ])
 
-    return dataset, test_dataset, num_classes
+    train_dataset = ObjectDataset(args.data_dir / "train", transform=train_transform)
+    test_dataset = ObjectDataset(args.data_dir / "test", transform=transform)
+
+    num_classes = len(train_dataset.classes) + 1  # add "background" class
+
+    return train_dataset, test_dataset, num_classes
 
 
 def initialize_optimizer(model, args):
