@@ -48,6 +48,7 @@ def main(args):
     # Development mode overrides.
     args.log_interval = 1 if args.dev_mode else args.log_interval
     args.max_epochs = 2 if args.dev_mode else args.max_epochs
+    args.backbone_epochs = 1 if args.dev_mode else args.backbone_epochs
 
     train_dataset, test_dataset, num_classes = initialize_datasets(args)
 
@@ -107,6 +108,16 @@ def main(args):
         trainer.add_event_handler(
             Events.EPOCH_COMPLETED,
             lambda: lr_scheduler.step(),
+        )
+
+    def freeze_backbone(engine: Engine):
+        engine.logger.info("Freezing backbone")
+        model.backbone.requires_grad_(False)
+
+    if args.backbone_epochs is not None:
+        trainer.add_event_handler(
+            Events.EPOCH_COMPLETED(once=args.backbone_epochs),
+            freeze_backbone,
         )
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -339,6 +350,7 @@ def parse_args():
 
     # Other options...
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
+    parser.add_argument("--backbone-epochs", type=int, metavar="NUM", help="number of epochs to train the backbone")
     parser.add_argument("--log-interval", type=int, metavar="NUM", default=10, help="frequency of training step logging")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
