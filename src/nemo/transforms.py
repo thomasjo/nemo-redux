@@ -10,12 +10,17 @@ from PIL import Image
 
 
 class RandomDiscreteRotation():
-    def __init__(self, angles):
+    def __init__(self, angles, resample=0, expand=False):
         self.angles = angles
+        self.resample = resample
+        self.expand = expand
 
-    def __call__(self, img):
+    def __call__(self, image, target=None):
+        if target is not None:
+            raise NotImplementedError("target transformation not implemented")
         angle = random.choice(self.angles)
-        return rotate(img, angle)
+        image = F.rotate(image, angle, self.resample, self.expand)
+        return image
 
     def __repr__(self):
         return f"{self.__class__.__name__}(angles={self.angles})"
