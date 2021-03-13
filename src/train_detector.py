@@ -38,6 +38,7 @@ CLASS_COLORS = [
 def main(args):
     # Use fixed random seed if requested.
     if args.seed is not None:
+        print("USING FIX SEED: {}".format(args.seed))
         ensure_reproducibility(seed=args.seed)
 
     # Append timestamp to output directory.
