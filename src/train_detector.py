@@ -190,7 +190,6 @@ def main(args):
 
 def initialize_datasets(args):
     transform = Compose([ToTensor()])
-
     train_transform = Compose([
         RandomHorizontalFlip(),
         RandomVerticalFlip(),
@@ -198,6 +197,9 @@ def initialize_datasets(args):
         ColorJitter(brightness=0.1, contrast=0.1, saturation=0.01, hue=0.01),
         ToTensor(),
     ])
+
+    if args.no_augmentation:
+        train_transform = transform
 
     train_dataset = ObjectDataset(args.data_dir / "train", transform=train_transform)
     test_dataset = ObjectDataset(args.data_dir / "test", transform=transform)
@@ -351,6 +353,7 @@ def parse_args():
     # Other options...
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
     parser.add_argument("--backbone-epochs", type=int, metavar="NUM", help="number of epochs to train the backbone")
+    parser.add_argument("--no-augmentation", action="store_true", help="disable augmentation of training dataset")
     parser.add_argument("--log-interval", type=int, metavar="NUM", default=10, help="frequency of training step logging")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
