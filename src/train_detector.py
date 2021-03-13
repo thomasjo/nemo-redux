@@ -55,6 +55,13 @@ def main(args):
         train_dataset = Subset(train_dataset, indices=range(DEV_MODE_BATCHES))
         test_dataset = Subset(test_dataset, indices=range(DEV_MODE_BATCHES))
 
+        # Uncomment to debug transformations.
+        # for idx, (image, target) in enumerate(train_dataset, start=1):
+        #     print(idx)
+        #     to_pil_image(image).save(args.output_dir.parent / "image-{}.png".format(idx))
+        #     to_pil_image(target["masks"]).save(args.output_dir.parent / "mask-{}.png".format(idx))
+        # exit()
+
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=1,
