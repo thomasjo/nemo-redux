@@ -194,20 +194,10 @@ def initialize_optimizer(model, args):
     # parameters = model.parameters()
 
     if args.optimizer == "adam":
-        optimizer = optim.Adam(
-            parameters,
-            lr=args.learning_rate,
-            weight_decay=args.weight_decay,
-        )
+        optimizer = optim.Adam(parameters, lr=args.learning_rate, weight_decay=args.weight_decay)
     elif args.optimizer == "sgd":
-        optimizer = optim.SGD(
-            parameters,
-            lr=args.learning_rate,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay,
-        )
+        optimizer = optim.SGD(parameters, lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     else:
-        # NOTE: This should never happen when using argparse.
         raise NotImplementedError("Unsupported optimizer: {}".format(args.optimizer))
 
     lr_scheduler = initialize_lr_scheduler(optimizer, args)
