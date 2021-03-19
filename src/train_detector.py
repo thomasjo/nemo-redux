@@ -225,8 +225,10 @@ def initialize_optimizer(model, args):
 
 
 def initialize_lr_scheduler(optimizer, args):
-    if args.lr_step_size is not None:
-        return optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
+    if args.lr_milestones is not None:
+        return optim.lr_scheduler.MultiStepLR(optimizer, args.lr_milestones, args.lr_gamma)
+    elif args.lr_step_size is not None:
+        return optim.lr_scheduler.StepLR(optimizer, args.lr_step_size, args.lr_gamma)
 
     return None
 
@@ -343,6 +345,7 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=0, metavar="NUM", help="weight decay; only used by some optimizers")
 
     # Learning rate scheduler parameters.
+    parser.add_argument("--lr-milestones", type=int, nargs="+", metavar="NUM", help="number of epochs per learning rate decay period")
     parser.add_argument("--lr-step-size", type=int, metavar="NUM", help="number of epochs per learning rate decay period")
     parser.add_argument("--lr-gamma", type=float, metavar="NUM", help="learning rate decay factor")
 
