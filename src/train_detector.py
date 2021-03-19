@@ -50,9 +50,6 @@ def main(args):
     args.max_epochs = 2 if args.dev_mode else args.max_epochs
     args.backbone_epochs = 1 if args.dev_mode else args.backbone_epochs
 
-    print(args)
-    exit()
-
     train_dataset, test_dataset, num_classes = initialize_datasets(args)
 
     if args.dev_mode:
