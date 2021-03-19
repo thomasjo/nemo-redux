@@ -16,14 +16,13 @@ from nemo.transforms import RandomDiscreteRotation
 
 
 class ObjectDataset(Dataset):
-    def __init__(self, root_dir, transform=None, target_transform=None, max_image_size=2000):
+    def __init__(self, root_dir, transform=None, max_image_size=2000):
         super().__init__()
 
         if not isinstance(root_dir, Path):
             root_dir = Path(root_dir)
 
         self.transform = transform
-        self.target_transform = target_transform
         self.max_image_size = max_image_size
 
         self.annotations = self.load_annotations(root_dir)
@@ -49,9 +48,6 @@ class ObjectDataset(Dataset):
         if scale_factor > 1:
             image_size = tuple(round(d / scale_factor) for d in image_size)
             image = image.resize(image_size, resample=Image.NEAREST)
-
-        if self.transform:
-            image = self.transform(image)
 
         mask_image = Image.open(self.mask_files[idx])
         if scale_factor > 1:
@@ -83,8 +79,8 @@ class ObjectDataset(Dataset):
             "iscrowd": torch.zeros(len(obj_ids), dtype=torch.int64),
         }
 
-        if self.target_transform:
-            target = self.target_transform(target)
+        if self.transform:
+            image, target = self.transform(image, target)
 
         return image, target
 
