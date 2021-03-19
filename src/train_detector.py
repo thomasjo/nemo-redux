@@ -50,6 +50,9 @@ def main(args):
     args.max_epochs = 2 if args.dev_mode else args.max_epochs
     args.backbone_epochs = 1 if args.dev_mode else args.backbone_epochs
 
+    print(args)
+    exit()
+
     train_dataset, test_dataset, num_classes = initialize_datasets(args)
 
     if args.dev_mode:
@@ -345,7 +348,7 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=0, metavar="NUM", help="weight decay; only used by some optimizers")
 
     # Learning rate scheduler parameters.
-    parser.add_argument("--lr-milestones", type=int, nargs="+", metavar="NUM", help="number of epochs per learning rate decay period")
+    parser.add_argument("--lr-milestones", type=int, action="append", metavar="NUM", help="number of epochs per learning rate decay period")
     parser.add_argument("--lr-step-size", type=int, metavar="NUM", help="number of epochs per learning rate decay period")
     parser.add_argument("--lr-gamma", type=float, metavar="NUM", help="learning rate decay factor")
 
