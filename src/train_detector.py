@@ -1,3 +1,5 @@
+import gc
+
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Callable, Union
@@ -13,6 +15,7 @@ from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
 from torch.utils.data import DataLoader, Subset
+from torchvision.models.detection import MaskRCNN
 from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import ObjectDataset
@@ -110,14 +113,11 @@ def main(args):
             lambda: lr_scheduler.step(),
         )
 
-    def freeze_backbone(engine: Engine):
-        engine.logger.info("Freezing backbone")
-        model.backbone.requires_grad_(False)
-
     if args.backbone_epochs is not None:
         trainer.add_event_handler(
             Events.EPOCH_COMPLETED(once=args.backbone_epochs),
             freeze_backbone,
+            model,
         )
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -142,6 +142,9 @@ def main(args):
     @trainer.on(Events.EPOCH_COMPLETED)
     def run_evaluator(engine: Engine):
         evaluator.run(test_dataloader)
+
+    if torch.cuda.is_available():
+        trainer.add_event_handler(Events.EPOCH_COMPLETED, empty_cuda_cache)
 
     # COCO evaluation scores.
     # -----------------------
@@ -329,6 +332,17 @@ def prepare_coco_scores(coco_evaluator: CocoEvaluator, tag="validation"):
         })
 
     return scores
+
+
+def freeze_backbone(engine: Engine, model: MaskRCNN):
+    engine.logger.info("Freezing backbone.")
+    model.backbone.requires_grad_(False)
+
+
+def empty_cuda_cache(engine: Engine):
+    engine.logger.info("Releasing cached CUDA memory.")
+    torch.cuda.empty_cache()
+    gc.collect()
 
 
 def parse_args():
