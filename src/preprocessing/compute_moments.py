@@ -3,11 +3,13 @@ from pathlib import Path
 
 import torch
 
-from torch.utils.data import DataLoader
-from torchvision.datasets import ImageFolder
-from torchvision.transforms import Compose, Resize, ToTensor
-
+from nemo.datasets import classification_dataloaders, detection_dataloaders
 from nemo.utils import ensure_reproducibility
+
+DATASET_TYPES = [
+    "classification",
+    "detection",
+]
 
 
 class RunningAverage:
@@ -41,15 +43,28 @@ class RunningAverage:
 def main(args):
     ensure_reproducibility(seed=42)
 
-    transform = Compose([Resize(256), ToTensor()])
-    train_dataset = ImageFolder(args.data_dir / "train", transform=transform)
-    train_loader = DataLoader(train_dataset, num_workers=args.num_workers, batch_size=128)
+    if args.type == DATASET_TYPES[0]:
+        train_loader, _, _ = classification_dataloaders(
+            args.data_dir,
+            no_augmentation=True,
+            num_workers=args.num_workers,
+        )
+    elif args.type == DATASET_TYPES[1]:
+        train_loader, _, _ = detection_dataloaders(
+            args.data_dir,
+            no_augmentation=True,
+            num_workers=args.num_workers,
+        )
 
     running_mean = RunningAverage()
     running_std = RunningAverage()
 
     with torch.no_grad():
         for batch_idx, (image, _) in enumerate(train_loader):
+            print("Processing batch {}".format(batch_idx + 1))
+
+            if isinstance(image, list):
+                image = torch.stack(image)
             image_flattened = torch.flatten(image, start_dim=2)
 
             mean = torch.mean(image_flattened, dim=2)
@@ -64,7 +79,10 @@ def main(args):
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--data-dir", type=Path, metavar="PATH", required=True, help="path to partitioned data directory")
+    parser.add_argument("--type", type=str, metavar="NAME", choices=DATASET_TYPES, default=DATASET_TYPES[0], help="type of dataset to process")
+    parser.add_argument("--batch-size", type=int, metavar="N", default=2, help="number of examples per batch")
     parser.add_argument("--num-workers", type=int, metavar="N", default=2, help="number of workers to use for preparing batches of data")
+
     return parser.parse_args()
 
 
