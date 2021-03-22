@@ -21,13 +21,17 @@ spec:
         # Optimizer parameters.
         - --optimizer=adam
         - --learning-rate=1e-5
-        - --weight-decay=1e-6
+        - --weight-decay=1e-5
         # - --optimizer=sgd
         # - --learning-rate=5e-3
         # - --weight-decay=5e-5
         # - --momentum=0.9
         # Learning rate scheduler parameters.
-        - --lr-step-size=25
+        # - --lr-milestones=25 40 45
+        - --lr-milestones=25
+        - --lr-milestones=40
+        - --lr-milestones=45
+        # - --lr-step-size=25
         - --lr-gamma=0.1
         # Stochasticity parameters.
         - --seed=42
