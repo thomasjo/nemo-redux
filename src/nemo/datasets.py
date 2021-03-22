@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.utils.data.dataset import Subset
 import yaml
 
 from PIL import Image
@@ -12,7 +13,7 @@ from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import CenterCrop, ColorJitter, Compose, Normalize, RandomCrop, RandomHorizontalFlip, Resize, ToTensor
 
-from nemo.transforms import RandomDiscreteRotation
+import nemo.transforms
 
 
 class ObjectDataset(Dataset):
@@ -126,7 +127,72 @@ class ObjectDataset(Dataset):
         return classes, class_to_idx
 
 
-def classification_dataloaders(data_dir, batch_size=32, num_workers=None):
+def initialize_detection_datasets(data_dir, no_augmentation=False):
+    transform = nemo.transforms.Compose([nemo.transforms.ToTensor()])
+
+    train_transform = nemo.transforms.Compose([
+        nemo.transforms.RandomHorizontalFlip(),
+        nemo.transforms.RandomVerticalFlip(),
+        nemo.transforms.GammaJitter(gamma=0.2),
+        nemo.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.01, hue=0.01),
+        nemo.transforms.ToTensor(),
+    ])
+
+    if no_augmentation:
+        train_transform = transform
+
+    train_dataset = ObjectDataset(data_dir / "train", transform=train_transform)
+    test_dataset = ObjectDataset(data_dir / "test", transform=transform)
+
+    num_classes = len(train_dataset.classes) + 1  # add "background" class
+
+    return train_dataset, test_dataset, num_classes
+
+
+def detection_dataloaders(
+    data_dir,
+    batch_size=1,
+    subset_indices=None,
+    no_augmentation=False,
+    num_workers=0,
+):
+    train_dataset, test_dataset, num_classes = initialize_detection_datasets(data_dir, no_augmentation)
+
+    if subset_indices is not None:
+        train_dataset = Subset(train_dataset, subset_indices)
+        test_dataset = Subset(test_dataset, subset_indices)
+
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+    )
+
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+    )
+
+    return train_dataloader, test_dataloader, num_classes
+
+
+# TODO(thomasjo): Rename to something more descriptive.
+def collate_fn(batch):
+    images, targets = zip(*batch)
+    return list(images), list(targets)
+
+
+def classification_dataloaders(
+    data_dir,
+    batch_size=32,
+    no_augmentation=False,
+    num_workers=None,
+):
     # TODO(thomasjo): Consider calculating moments on-demand.
     # Fetch dataset moments from metadata.
     moments = load_metadata(data_dir)
@@ -142,11 +208,14 @@ def classification_dataloaders(data_dir, batch_size=32, num_workers=None):
         Resize(256),
         RandomCrop(224),
         RandomHorizontalFlip(),
-        RandomDiscreteRotation(angles=[0, 90, 180, 270]),
+        nemo.transforms.RandomDiscreteRotation(angles=[0, 90, 180, 270]),
         ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.05),
         ToTensor(),
         Normalize(**moments),
     ])
+
+    if no_augmentation:
+        train_transform = transform
 
     train_dataset = ImageFolder(data_dir / "train", transform=train_transform)
     train_dataset.moments = moments  # Embed training dataset moments into dataset object

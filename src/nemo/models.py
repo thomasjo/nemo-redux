@@ -74,12 +74,21 @@ class StochasticTwoMLPHead(TwoMLPHead):
         return x
 
 
-def initialize_detector(num_classes, dropout_rate=0, trainable_backbone_layers=3, box_detections_per_img=256):
+def initialize_detector(
+    num_classes,
+    dropout_rate=0,
+    trainable_backbone_layers=3,
+    box_detections_per_img=256,
+    image_mean=None,
+    image_std=None,
+):
     # NOTE: See https://pytorch.org/docs/stable/torchvision/models.html#mask-r-cnn.
     model = vision.models.detection.maskrcnn_resnet50_fpn(
         pretrained=True,
         trainable_backbone_layers=trainable_backbone_layers,
         box_detections_per_img=box_detections_per_img,
+        image_mean=image_mean,
+        image_std=image_std,
     )
 
     # Use box head with dropout sampling support.

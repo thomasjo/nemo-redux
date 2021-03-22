@@ -14,13 +14,11 @@ from ignite.contrib.engines.common import setup_wandb_logging
 from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
-from torch.utils.data import DataLoader, Subset
 from torchvision.models.detection import MaskRCNN
 from torchvision.transforms.functional import to_pil_image
 
-from nemo.datasets import ObjectDataset
+from nemo.datasets import detection_dataloaders
 from nemo.models import initialize_detector
-from nemo.transforms import ColorJitter, Compose, GammaJitter, RandomHorizontalFlip, RandomVerticalFlip, ToTensor
 from nemo.utils import ensure_reproducibility, redirect_output, timestamp_path
 from nemo.vendor.torchvision.coco_eval import CocoEvaluator
 from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
@@ -53,33 +51,26 @@ def main(args):
     args.max_epochs = 2 if args.dev_mode else args.max_epochs
     args.backbone_epochs = 1 if args.dev_mode else args.backbone_epochs
 
-    train_dataset, test_dataset, num_classes = initialize_datasets(args)
+    image_mean, image_std = dataset_moments(args)
 
-    if args.dev_mode:
-        train_dataset = Subset(train_dataset, indices=range(DEV_MODE_BATCHES))
-        test_dataset = Subset(test_dataset, indices=range(DEV_MODE_BATCHES))
-
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=1,
-        shuffle=True,
-        collate_fn=collate_fn,
-        num_workers=args.num_workers,
-    )
-
-    test_dataloader = DataLoader(
-        test_dataset,
-        batch_size=1,
-        shuffle=False,
-        collate_fn=collate_fn,
+    subset_indices = range(DEV_MODE_BATCHES) if args.dev_mode else None
+    train_dataloader, test_dataloader, num_classes = detection_dataloaders(
+        args.data_dir,
+        subset_indices=subset_indices,
+        no_augmentation=args.no_augmentation,
         num_workers=args.num_workers,
     )
 
     with redirect_output():
-        coco_gt = convert_to_coco_api(test_dataset)
+        coco_gt = convert_to_coco_api(test_dataloader.dataset)
 
-    # Prepare model and optimizer.
-    model = initialize_detector(num_classes, args.dropout_rate)
+    model = initialize_detector(
+        num_classes,
+        args.dropout_rate,
+        image_mean=image_mean,
+        image_std=image_std,
+    )
+
     model = model.to(device=args.device)
     optimizer, lr_scheduler = initialize_optimizer(model, args)
 
@@ -182,27 +173,6 @@ def main(args):
 
     # Start training procedure...
     trainer.run(train_dataloader, max_epochs=args.max_epochs)
-
-
-def initialize_datasets(args):
-    transform = Compose([ToTensor()])
-    train_transform = Compose([
-        RandomHorizontalFlip(),
-        RandomVerticalFlip(),
-        GammaJitter(gamma=0.2),
-        ColorJitter(brightness=0.1, contrast=0.1, saturation=0.01, hue=0.01),
-        ToTensor(),
-    ])
-
-    if args.no_augmentation:
-        train_transform = transform
-
-    train_dataset = ObjectDataset(args.data_dir / "train", transform=train_transform)
-    test_dataset = ObjectDataset(args.data_dir / "test", transform=transform)
-
-    num_classes = len(train_dataset.classes) + 1  # add "background" class
-
-    return train_dataset, test_dataset, num_classes
 
 
 def initialize_optimizer(model, args):
@@ -308,12 +278,6 @@ def running_average(src: Union[Metric, Callable, str]):
     raise TypeError("unsupported metric type: {}".format(type(src)))
 
 
-# TODO(thomasjo): Rename to something more descriptive.
-def collate_fn(batch):
-    images, targets = zip(*batch)
-    return list(images), list(targets)
-
-
 def prepare_coco_scores(coco_evaluator: CocoEvaluator, tag="validation"):
     scores = {}
     for iou_type, coco_eval in coco_evaluator.coco_eval.items():
@@ -325,6 +289,13 @@ def prepare_coco_scores(coco_evaluator: CocoEvaluator, tag="validation"):
         })
 
     return scores
+
+
+def dataset_moments(args):
+    if args.normalize:
+        return (0.141, 0.142, 0.140), (0.150, 0.137, 0.123)
+
+    return None, None
 
 
 def freeze_backbone(engine: Engine, model: MaskRCNN):
@@ -345,6 +316,10 @@ def parse_args():
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR, metavar="PATH", help="path to dataset directory")
     parser.add_argument("--output-dir", type=Path, required=True, metavar="PATH", help="path to output directory")
 
+    # Dataset options.
+    parser.add_argument("--no-augmentation", action="store_true", help="disable augmentation of training dataset")
+    parser.add_argument("--normalize", action="store_true", help="enable custom image normalization")
+
     # Optimizer parameters.
     parser.add_argument("--optimizer", type=str, default="adam", choices=["adam", "sgd"], metavar="NAME", help="optimizer to use for training")
     parser.add_argument("--learning-rate", type=float, default=1e-5, metavar="NUM", help="initial learning rate")
@@ -363,7 +338,6 @@ def parse_args():
     # Other options...
     parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
     parser.add_argument("--backbone-epochs", type=int, metavar="NUM", help="number of epochs to train the backbone")
-    parser.add_argument("--no-augmentation", action="store_true", help="disable augmentation of training dataset")
     parser.add_argument("--log-interval", type=int, metavar="NUM", default=10, help="frequency of training step logging")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
