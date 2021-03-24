@@ -128,8 +128,8 @@ def main(args):
     def run_evaluator(engine: Engine):
         evaluator.run(test_dataloader)
 
-    if torch.cuda.is_available():
-        trainer.add_event_handler(Events.EPOCH_COMPLETED, empty_cuda_cache)
+    # if torch.cuda.is_available():
+    #     trainer.add_event_handler(Events.EPOCH_COMPLETED, empty_cuda_cache)
 
     # COCO evaluation scores.
     # -----------------------
