@@ -182,6 +182,8 @@ def initialize_optimizer(model, args):
 
     if args.optimizer == "adam":
         optimizer = optim.Adam(parameters, lr=args.learning_rate, weight_decay=args.weight_decay)
+    elif args.optimizer == "adamw":
+        optimizer = optim.AdamW(parameters, lr=args.learning_rate, weight_decay=args.weight_decay)
     elif args.optimizer == "sgd":
         optimizer = optim.SGD(parameters, lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     else:
@@ -322,7 +324,7 @@ def parse_args():
     parser.add_argument("--normalize", action="store_true", help="enable custom image normalization")
 
     # Optimizer parameters.
-    parser.add_argument("--optimizer", type=str, default="adam", choices=["adam", "sgd"], metavar="NAME", help="optimizer to use for training")
+    parser.add_argument("--optimizer", type=str, default="adam", choices=["adam", "adamw", "sgd"], metavar="NAME", help="optimizer to use for training")
     parser.add_argument("--learning-rate", type=float, default=1e-5, metavar="NUM", help="initial learning rate")
     parser.add_argument("--momentum", type=float, default=0, metavar="NUM", help="optimizer momentum; only used by some optimizers")
     parser.add_argument("--weight-decay", type=float, default=0, metavar="NUM", help="weight decay; only used by some optimizers")
