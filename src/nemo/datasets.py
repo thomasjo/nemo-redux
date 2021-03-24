@@ -4,14 +4,14 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data.dataset import Subset
+import torchvision as vision
 import yaml
 
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
+from torch.utils.data.dataset import Subset
 from torchvision.datasets import ImageFolder
-from torchvision.transforms import CenterCrop, ColorJitter, Compose, Normalize, RandomCrop, RandomHorizontalFlip, Resize, ToTensor
 
 import nemo.transforms
 
@@ -197,21 +197,21 @@ def classification_dataloaders(
     # Fetch dataset moments from metadata.
     moments = load_metadata(data_dir)
 
-    transform = Compose([
-        Resize(256),
-        CenterCrop(224),
-        ToTensor(),
-        Normalize(**moments),
+    transform = vision.transforms.Compose([
+        vision.transforms.Resize(256),
+        vision.transforms.CenterCrop(224),
+        vision.transforms.ToTensor(),
+        vision.transforms.Normalize(**moments),
     ])
 
-    train_transform = Compose([
-        Resize(256),
-        RandomCrop(224),
-        RandomHorizontalFlip(),
+    train_transform = vision.transforms.Compose([
+        vision.transforms.Resize(256),
+        vision.transforms.RandomCrop(224),
+        vision.transforms.RandomHorizontalFlip(),
         nemo.transforms.RandomDiscreteRotation(angles=[0, 90, 180, 270]),
-        ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.05),
-        ToTensor(),
-        Normalize(**moments),
+        vision.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.05),
+        vision.transforms.ToTensor(),
+        vision.transforms.Normalize(**moments),
     ])
 
     if no_augmentation:
