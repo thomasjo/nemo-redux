@@ -67,6 +67,7 @@ def main(args):
     model = initialize_detector(
         num_classes,
         args.dropout_rate,
+        trainable_backbone_layers=args.trainable_backbone_layers,
         image_mean=image_mean,
         image_std=image_std,
     )
@@ -336,8 +337,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, metavar="NUM", help="random state seed")
 
     # Other options...
-    parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
+    parser.add_argument("--trainable-backbone-layers", type=int, metavar="NUM", default=3, help="number of trainable backbone layers")
     parser.add_argument("--backbone-epochs", type=int, metavar="NUM", help="number of epochs to train the backbone")
+    parser.add_argument("--max-epochs", type=int, metavar="NUM", default=25, help="maximum number of epochs to train")
     parser.add_argument("--log-interval", type=int, metavar="NUM", default=10, help="frequency of training step logging")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
     parser.add_argument("--num-workers", type=int, metavar="NUM", default=1, help="number of workers to use for data loaders")
