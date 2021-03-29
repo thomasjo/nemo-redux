@@ -105,16 +105,19 @@ def main(args):
             model,
         )
 
-    @trainer.on(Events.EPOCH_COMPLETED)
+    @trainer.on(Events.EPOCH_COMPLETED(every=args.checkpoint_interval) | Events.COMPLETED)
     def save_model(engine: Engine):
-        ckpt_file = args.output_dir / f"ckpt-{engine.state.epoch:02d}.pt"
+        slug = f"{engine.state.epoch:02d}"
+        if engine.last_event_name is Events.COMPLETED:
+            slug = "final"
+        file = args.output_dir / f"ckpt-{slug}.pt"
         torch.save({
             "epoch": engine.state.epoch,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "dropout_rate": args.dropout_rate,
             "num_classes": num_classes,
-        }, ckpt_file)
+        }, file)
 
     @trainer.on(Events.EPOCH_STARTED)
     def log_epoch(engine: Engine):
@@ -318,6 +321,7 @@ def parse_args():
     # I/O options.
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR, metavar="PATH", help="path to dataset directory")
     parser.add_argument("--output-dir", type=Path, required=True, metavar="PATH", help="path to output directory")
+    parser.add_argument("--checkpoint-interval", type=int, metavar="NUM", default=1, help="frequency of model checkpoint")
 
     # Dataset options.
     parser.add_argument("--no-augmentation", action="store_true", help="disable augmentation of training dataset")
