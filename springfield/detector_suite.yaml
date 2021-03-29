@@ -21,14 +21,24 @@ spec:
         volumeMounts:
         - name: storage
           mountPath: /storage
-        - name: shm
-          mountPath: /dev/shm
+        - name: local-data
+          mountPath: /data
+        # - name: shm
+        #   mountPath: /dev/shm
+        resources:
+          limits:
+            memory: 42Gi
+            cpu: 8000m
       volumes:
       - name: storage
         persistentVolumeClaim:
             claimName: storage
-      - name: shm
-        emptyDir:
-          medium: Memory
+      - name: local-data
+        hostPath:
+          path: /home/tjo083/data
+          type: Directory
+      # - name: shm
+      #   emptyDir:
+      #     medium: Memory
       restartPolicy: OnFailure
   backoffLimit: 0

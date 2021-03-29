@@ -10,15 +10,32 @@ function random-string() {
 suite_id="$(random-string 4)"
 echo "Launching suite with ID \"${suite_id}\"..."
 
-# Training args.
-data_dir="data/segmentation/partitioned/combined"
+# I/O options.
+data_dir="/data/segmentation-resized/partitioned/combined"
 output_dir="output/detection/suite/${suite_id}"
-dropout_rate=0.2
-num_workers=0
+checkpoint_interval="5"
+
+# Optimizer parameters.
+optimizer="adamw"
+learning_rate="1e-5"
+weight_decay="1e-4"
+
+# Learning rate scheduler parameters.
+lr_milestones="25,40,45"
+lr_gamma="0.1"
+
+# Other options...
+dropout_rate="0.2"
+trainable_backbone_layers="3"
+backbone_epochs="25"
+max_epochs="50"
+num_workers="0"
+
+# Stochasticity parameters.
 seed=42  # Make suite deterministic.
 
 # Suite params.
-num_repetitions=5
+num_repetitions=10
 
 # Attempt to speed things up by copying data to host.
 host_dir="/tmp/data"
@@ -33,20 +50,38 @@ echo "-------------------"
 for ((i=0; i<num_repetitions; i++)); do
   echo -e "\n** Non-stochastic run #$((i+1))..."
   python src/train_detector.py \
+    --seed=$((seed+i)) \
+    --dropout-rate="0" \
     --data-dir="${data_dir}" \
     --output-dir="${output_dir}" \
-    --dropout-rate=0 \
-    --num-workers=${num_workers} \
-    --seed=$((seed+i))
+    --checkpoint-interval="${checkpoint_interval}" \
+    --optimizer="${optimizer}" \
+    --learning-rate="${learning_rate}" \
+    --weight-decay="${weight_decay}" \
+    --lr-milestones="${lr_milestones}" \
+    --lr-gamma="${lr_gamma}" \
+    --trainable-backbone-layers="${trainable_backbone_layers}" \
+    --backbone-epochs="${backbone_epochs}" \
+    --max-epochs="${max_epochs}" \
+    --num-workers=${num_workers}
 done
 
 # Train some models with dropout sampling...
-for ((i=0; i<num_repetitions; i++)); do
-  echo -e "\n** Stochastic run #$((i+1))..."
-  python src/train_detector.py \
-    --data-dir="${data_dir}" \
-    --output-dir="${output_dir}" \
-    --dropout-rate=$dropout_rate \
-    --num-workers=${num_workers} \
-    --seed=$((seed+i))
-done
+# for ((i=0; i<num_repetitions; i++)); do
+#   echo -e "\n** Stochastic run #$((i+1))..."
+#   python src/train_detector.py \
+#     --seed=$((seed+i)) \
+#     --dropout-rate="${dropout_rate}" \
+#     --data-dir="${data_dir}" \
+#     --output-dir="${output_dir}" \
+#     --checkpoint-interval="${checkpoint_interval}" \
+#     --optimizer="${optimizer}" \
+#     --learning-rate="${learning_rate}" \
+#     --weight-decay="${weight_decay}" \
+#     --lr-milestones="${lr_milestones}" \
+#     --lr-gamma="${lr_gamma}" \
+#     --trainable-backbone-layers="${trainable_backbone_layers}" \
+#     --backbone-epochs="${backbone_epochs}" \
+#     --max-epochs="${max_epochs}" \
+#     --num-workers=${num_workers}
+# done
