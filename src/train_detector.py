@@ -315,6 +315,18 @@ def empty_cuda_cache(engine: Engine):
     gc.collect()
 
 
+def int_list(arg_string: str):
+    split_values = [int(v) for v in arg_string.split(",") if v]
+    return split_values
+
+
+# NOTE: Alternative to `int_list` function.
+# class SplitIntArgs(argparse.Action):
+#     def __call__(self, parser, namespace, values, option_string=None):
+#         split_values = [int(v) for v in values.split(",") if v]
+#         setattr(namespace, self.dest, split_values)
+
+
 def parse_args():
     parser = ArgumentParser()
 
@@ -334,7 +346,7 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=0, metavar="NUM", help="weight decay; only used by some optimizers")
 
     # Learning rate scheduler parameters.
-    parser.add_argument("--lr-milestones", type=int, action="append", metavar="NUM", help="number of epochs per learning rate decay period")
+    parser.add_argument("--lr-milestones", type=int_list, metavar="NUM", help="number of epochs per learning rate decay period")
     parser.add_argument("--lr-step-size", type=int, metavar="NUM", help="number of epochs per learning rate decay period")
     parser.add_argument("--lr-gamma", type=float, metavar="NUM", help="learning rate decay factor")
 
