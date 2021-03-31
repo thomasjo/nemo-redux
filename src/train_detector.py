@@ -1,6 +1,7 @@
 import gc
 
 from argparse import ArgumentParser
+from contextlib import ContextDecorator
 from pathlib import Path
 from typing import Callable, Union
 from warnings import catch_warnings, filterwarnings
@@ -243,7 +244,9 @@ def create_evaluator(model, args, name="evaluator"):
         images, targets = batch
         images = convert_tensor(images, device=args.device, non_blocking=False)
 
-        outputs = model(images)
+        with torch_num_threads(1):
+            outputs = model(images)
+
         outputs = convert_tensor(outputs, device="cpu")
 
         # Store results in engine state.
@@ -313,6 +316,18 @@ def empty_cuda_cache(engine: Engine):
     engine.logger.info("Releasing cached CUDA memory.")
     torch.cuda.empty_cache()
     gc.collect()
+
+
+class torch_num_threads(ContextDecorator):
+    def __init__(self, num: int):
+        self.num = num
+        self.original_num = torch.get_num_threads()
+
+    def __enter__(self):
+        torch.set_num_threads(self.num)
+
+    def __exit__(self, *exc):
+        torch.set_num_threads(self.original_num)
 
 
 def int_list(arg_string: str):
