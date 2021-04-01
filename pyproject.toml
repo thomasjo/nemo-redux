@@ -15,15 +15,15 @@ packages = [{ include = "nemo", from = "src" }]
 flake8 = "^3.8.4"
 flake8-isort = "^4.0.0"
 isort = "^5.7.0"
-rope = "^0.17.0"
-yapf = "^0.30.0"
+rope = "^0.18.0"
+yapf = "^0.31.0"
 
 [tool.poetry.dependencies]
 python = "^3.8"
 
 # PyTorch is expected to be supplied by the container image.
-torch = { version = "1.7.1", optional = true }
-torchvision = { version = "0.8.2", optional = true }
+torch = { version = "1.8.1", optional = true }
+torchvision = { version = "0.9.1", optional = true }
 
 matplotlib = "^3.3.3"
 numpy = "^1.19.5"
@@ -32,7 +32,7 @@ pillow = "^8.1.0"
 pycocotools = "^2.0.2"
 pytorch-ignite = "^0.4.2"
 pyyaml = "^5.4.1"
-scikit-learn = "^0.23.2"
+scikit-learn = "^0.24.1"
 scipy = "^1.6.1"
 tqdm = "^4.57.0"
 wandb = "^0.10.20"
