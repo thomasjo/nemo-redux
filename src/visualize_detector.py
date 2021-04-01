@@ -2,10 +2,11 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import cv2 as cv
+import numpy as np
 import torch
 
 from ignite.utils import convert_tensor
-from torchvision.transforms.functional import to_tensor
+from torchvision.transforms.functional import to_pil_image
 
 from nemo.models import initialize_detector
 
@@ -51,22 +52,16 @@ def main(args):
     cv.imwrite(str(args.output_dir / args.image_file[0].name), result)
 
 
-def predict(image, model, device="cpu"):
-    # cv_image = cv.cvtColor(image.copy(), cv.COLOR_RGB2BGR)
-    cv_image = image.copy()
-    # image_tensor = torch.from_numpy(image)
-    image_tensor = to_tensor(image.copy())
-    image_tensor = convert_tensor(image_tensor, device=device)
-
+def predict(image: torch.Tensor, model):
     with torch.no_grad():
         model.eval()
-        output = model([image_tensor])
+        output = model([image])
         output = convert_tensor(output, device="cpu")
 
     top_predictions = select_top_predictions(output[0], 0.7)
 
-    # result = cv_image.copy()
-    result = cv_image
+    # TODO: Check if we need to copy the image tensor to keep it on the source device.
+    result = np.asarray(to_pil_image(image.cpu()))
     result = overlay_boxes(result, top_predictions)
     result = overlay_masks(result, top_predictions)
     result = overlay_class_names(result, top_predictions)
@@ -75,7 +70,6 @@ def predict(image, model, device="cpu"):
 
 
 def select_top_predictions(predictions, threshold):
-    # idx = (predictions["scores"] > threshold).nonzero().squeeze(1)
     idx = torch.nonzero(predictions["scores"] > threshold, as_tuple=False).squeeze(1)
     new_predictions = {}
     for k, v in predictions.items():

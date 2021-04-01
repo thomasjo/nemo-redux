@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Callable, Union
 from warnings import catch_warnings, filterwarnings
 
-import numpy as np
 import torch
 import torch.optim as optim
 import wandb
@@ -16,7 +15,6 @@ from ignite.engine import Engine, Events
 from ignite.metrics import Metric, RunningAverage
 from ignite.utils import convert_tensor, setup_logger
 from torchvision.models.detection import MaskRCNN
-from torchvision.transforms.functional import to_pil_image
 
 from nemo.datasets import detection_dataloaders
 from nemo.models import initialize_detector
@@ -165,9 +163,8 @@ def main(args):
     @evaluator.on(Events.ITERATION_COMPLETED)
     def visualize_masks(engine: Engine):
         if len(engine.state.result_images) < MAX_MASK_IMAGES:
-            images, _ = engine.state.batch
-            image = np.asarray(to_pil_image(images[0]))
-            result_image, _, _ = predict(image, model, device=args.device)
+            image = engine.state.batch[0][0]  # Grab first image
+            result_image, *_ = predict(image, model)
             engine.state.result_images.append(result_image)
 
     @evaluator.on(Events.COMPLETED)
