@@ -9,7 +9,7 @@ spec:
         springfield.uit.no/gpu-type: titan-xp
       containers:
       - name: nemo-redux-detector-suite
-        image: thomasjo/nemo-redux:detection
+        image: thomasjo/nemo-redux:detection-20210310
         imagePullPolicy: Always
         workingDir: /storage/nemo-redux
         command: ["bash", "bin/detector_suite"]
@@ -32,7 +32,7 @@ spec:
       volumes:
       - name: storage
         persistentVolumeClaim:
-            claimName: storage
+          claimName: storage
       - name: local-data
         hostPath:
           path: /home/tjo083/data
