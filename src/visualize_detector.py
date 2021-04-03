@@ -31,7 +31,7 @@ def main(args):
 
     model = initialize_detector(num_classes, dropout_rate)
     model.load_state_dict(ckpt.get("model"))
-    model.eval()
+    model = model.to(device=args.device)
 
     # Ensure output directory exists.
     # args.output_dir = timestamp_path(args.output_dir)
@@ -47,15 +47,15 @@ def main(args):
         image_size = tuple(round(d / scale_factor) for d in reversed(image_size))
         image = cv.resize(image, image_size, interpolation=cv.INTER_NEAREST)
 
-    result, output, top_predictions = predict(image, model)
+    result, output, top_predictions = predict(image, model, args)
 
     cv.imwrite(str(args.output_dir / args.image_file[0].name), result)
 
 
-def predict(image: torch.Tensor, model):
+def predict(image: torch.Tensor, model, args):
     with torch.no_grad():
         model.eval()
-        output = model([image])
+        output = model([image.to(device=args.device)])
         output = convert_tensor(output, device="cpu")
 
     top_predictions = select_top_predictions(output[0], 0.7)
@@ -173,6 +173,7 @@ def parse_args():
     parser.add_argument("--image-file", type=Path, required=True, action="append", metavar="PATH", help="path to image used for prediction")
     parser.add_argument("--output-dir", type=Path, default="output/predictions", metavar="PATH", help="path to output directory")
     parser.add_argument("--dropout-rate", type=float, default=None, metavar="NUM", help="forced dropout rate for stochastic sampling")
+    parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
 
     return parser.parse_args()
 

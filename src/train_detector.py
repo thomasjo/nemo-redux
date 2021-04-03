@@ -164,7 +164,7 @@ def main(args):
     def visualize_masks(engine: Engine):
         if len(engine.state.result_images) < MAX_MASK_IMAGES:
             image = engine.state.batch[0][0]  # Grab first image
-            result_image, *_ = predict(image, model)
+            result_image, *_ = predict(image, model, args)
             engine.state.result_images.append(result_image)
 
     @evaluator.on(Events.COMPLETED)
