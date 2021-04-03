@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -eu
+
+file_dir="$(dirname "$(readlink -f "$0")")"
+source_root="$(dirname "${file_dir}")"
+target_root="springfield:nemo/redux"
+
+# Sync 'src' directory.
+rclone sync --fast-list --progress "${source_root}/src" "${target_root}/src" \
+  --exclude "__pycache__/**"
+
+# Sync 'springfield/bin' directory.
+rclone sync --fast-list --progress "${source_root}/springfield/bin" "${target_root}/bin"
