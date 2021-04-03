@@ -74,6 +74,19 @@ class RandomVerticalFlip():
         return image, target
 
 
+class RandomFlip():
+    def __init__(self, p=0.5):
+        self.p = p
+        self.transforms = [
+            RandomHorizontalFlip(p),
+            RandomVerticalFlip(p),
+        ]
+
+    def __call__(self, image, target):
+        t = random.choice(self.transforms)
+        return t(image, target)
+
+
 class GammaJitter():
     def __init__(self, gamma=0):
         self.gamma = self._check_input(gamma, "gamma")
