@@ -38,10 +38,10 @@ seed=42  # Make suite deterministic.
 num_repetitions=10
 
 # Attempt to speed things up by copying data to host.
-host_dir="/tmp/data"
-echo "Copying data from ${data_dir} -> ${host_dir}..."
-cp -r "${data_dir}" "${host_dir}"
-data_dir="${host_dir}"
+# host_dir="/tmp/data"
+# echo "Copying data from ${data_dir} -> ${host_dir}..."
+# cp -r "${data_dir}" "${host_dir}"
+# data_dir="${host_dir}"
 
 echo "Running experiments"
 echo "-------------------"
