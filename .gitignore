@@ -2,6 +2,9 @@
 .venv
 .vscode
 
+# Python clutter.
+__pycache__
+
 # Project-specific.
 /data
 /output
