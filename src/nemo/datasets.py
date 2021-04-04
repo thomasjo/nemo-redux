@@ -131,12 +131,12 @@ def initialize_detection_datasets(data_dir, no_augmentation=False):
     transform = nemo.transforms.Compose([nemo.transforms.ToTensor()])
 
     train_transform = nemo.transforms.Compose([
+        nemo.transforms.ToTensor(),
         # nemo.transforms.RandomFlip(),
         nemo.transforms.RandomHorizontalFlip(),
         nemo.transforms.RandomVerticalFlip(),
         nemo.transforms.GammaJitter(gamma=0.2),
         nemo.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.01, hue=0.01),
-        nemo.transforms.ToTensor(),
     ])
 
     if no_augmentation:
