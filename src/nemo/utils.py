@@ -54,6 +54,18 @@ def redirect_output(new_target=os.devnull):
         yield (stdout, stderr)
 
 
+class torch_num_threads(ContextDecorator):
+    def __init__(self, num: int):
+        self.num = num
+        self.original_num = torch.get_num_threads()
+
+    def __enter__(self):
+        torch.set_num_threads(self.num)
+
+    def __exit__(self, *exc):
+        torch.set_num_threads(self.original_num)
+
+
 # NOTE: Stolen from https://stackoverflow.com/a/33295456/57858.
 # yapf: disable
 COLORS = [

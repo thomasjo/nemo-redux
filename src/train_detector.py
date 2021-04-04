@@ -1,7 +1,6 @@
 import gc
 
 from argparse import ArgumentParser
-from contextlib import ContextDecorator
 from pathlib import Path
 from typing import Callable, Union
 from warnings import catch_warnings, filterwarnings
@@ -18,7 +17,7 @@ from torchvision.models.detection import MaskRCNN
 
 from nemo.datasets import detection_dataloaders
 from nemo.models import initialize_detector
-from nemo.utils import ensure_reproducibility, redirect_output, timestamp_path
+from nemo.utils import ensure_reproducibility, redirect_output, timestamp_path, torch_num_threads
 from nemo.vendor.torchvision.coco_eval import CocoEvaluator
 from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
 from visualize_detector import predict
@@ -313,18 +312,6 @@ def empty_cuda_cache(engine: Engine):
     engine.logger.info("Releasing cached CUDA memory.")
     torch.cuda.empty_cache()
     gc.collect()
-
-
-class torch_num_threads(ContextDecorator):
-    def __init__(self, num: int):
-        self.num = num
-        self.original_num = torch.get_num_threads()
-
-    def __enter__(self):
-        torch.set_num_threads(self.num)
-
-    def __exit__(self, *exc):
-        torch.set_num_threads(self.original_num)
 
 
 def int_list(arg_string: str):
