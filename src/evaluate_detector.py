@@ -1,6 +1,7 @@
 import pickle
 
 from argparse import ArgumentParser
+from collections import defaultdict
 from pathlib import Path
 from warnings import catch_warnings, filterwarnings
 
@@ -50,7 +51,7 @@ def main(args):
     print("Starting evaluation...")
     for _ in range(1):
         coco_evaluator = create_coco_evaluator(coco_gt)
-        coco_summaries = {}
+        coco_summaries = defaultdict(dict)
 
         for images, targets in test_dataloader:
             print("-" * 80)
@@ -76,10 +77,10 @@ def main(args):
 
             for image_id in results.keys():
                 for iou_type, evaluator in image_evaluator.coco_eval.items():
-                    coco_summaries[image_id] = {
+                    coco_summaries[image_id].update({
                         f"{iou_type}_eval": evaluator.eval,
                         f"{iou_type}_stats": evaluator.stats,
-                    }
+                    })
 
         print("\n\n")
         print("=" * 80)
@@ -88,10 +89,10 @@ def main(args):
         coco_evaluator.summarize()
 
         for iou_type, evaluator in coco_evaluator.coco_eval.items():
-            coco_summaries["all"] = {
+            coco_summaries["all"].update({
                 f"{iou_type}_eval": evaluator.eval,
                 f"{iou_type}_stats": evaluator.stats,
-            }
+            })
 
         with Path(args.output_dir, "summary.pkl").open(mode="wb") as f:
             pickle.dump(coco_summaries, f)
