@@ -25,6 +25,9 @@ python = "^3.8"
 torch = { version = "1.8.1", optional = true }
 torchvision = { version = "0.9.1", optional = true }
 
+# Jupyter is only used for figure notebooks, etc.
+jupyterlab = { version = "^3.0.12", optional = true }
+
 matplotlib = "^3.3.3"
 numpy = "^1.19.5"
 opencv-python-headless = "^4.5.1.48"
@@ -39,6 +42,7 @@ wandb = "^0.10.20"
 
 [tool.poetry.extras]
 torch = ["torch", "torchvision"]
+jupyter = ["jupyterlab"]
 
 [tool.isort]
 force_grid_wrap = 0
