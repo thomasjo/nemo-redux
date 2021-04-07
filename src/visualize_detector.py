@@ -1,12 +1,13 @@
-from argparse import ArgumentParser
+from argparse import ArgumentError, ArgumentParser
 from pathlib import Path
 
 import cv2 as cv
 import numpy as np
 import torch
+import seaborn
 
 from ignite.utils import convert_tensor
-from torchvision.transforms.functional import to_pil_image
+from torchvision.transforms.functional import to_pil_image, to_tensor
 
 from nemo.models import initialize_detector
 
@@ -37,19 +38,29 @@ def main(args):
     # args.output_dir = timestamp_path(args.output_dir)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    image = cv.imread(str(args.image_file[0]), cv.IMREAD_COLOR)
-    image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+    if args.image_dir:
+        image_files = sorted(args.image_dir.glob("*.png"))
+    elif args.image_file:
+        image_files = args.image_file
+    else:
+        raise ArgumentError("Need to specify either `--image-dir` or `--image-file`")
 
-    image_size = image.shape[:2]
-    largest_dim = max(image_size)
-    scale_factor = largest_dim / MAX_IMAGE_SIZE
-    if scale_factor > 1:
-        image_size = tuple(round(d / scale_factor) for d in reversed(image_size))
-        image = cv.resize(image, image_size, interpolation=cv.INTER_NEAREST)
+    for image_file in image_files:
+        image = cv.imread(str(image_file), cv.IMREAD_COLOR)
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
-    result, output, top_predictions = predict(image, model, args)
+        image_size = image.shape[:2]
+        largest_dim = max(image_size)
+        scale_factor = largest_dim / MAX_IMAGE_SIZE
+        if scale_factor > 1:
+            image_size = tuple(round(d / scale_factor) for d in reversed(image_size))
+            image = cv.resize(image, image_size, interpolation=cv.INTER_NEAREST)
 
-    cv.imwrite(str(args.output_dir / args.image_file[0].name), result)
+        image = to_tensor(image)
+        result, output, top_predictions = predict(image, model, args)
+
+        result = cv.cvtColor(result, cv.COLOR_RGB2BGR)
+        cv.imwrite(str(args.output_dir / image_file.name), result)
 
 
 def predict(image: torch.Tensor, model, args):
@@ -58,7 +69,7 @@ def predict(image: torch.Tensor, model, args):
         output = model([image.to(device=args.device)])
         output = convert_tensor(output, device="cpu")
 
-    top_predictions = select_top_predictions(output[0], 0.7)
+    top_predictions = select_top_predictions(output[0], args.threshold)
 
     # TODO: Check if we need to copy the image tensor to keep it on the source device.
     result = np.asarray(to_pil_image(image.cpu()))
@@ -83,9 +94,9 @@ def compute_colors_for_labels(labels, palette=None):
     Simple function that adds fixed colors depending on the class
     """
     if palette is None:
-        palette = torch.tensor([2**25 - 1, 2**15 - 1, 2**21 - 1])
-    colors = labels[:, None] * palette
-    colors = (colors % 255).numpy().astype("uint8")
+        palette = seaborn.palettes.color_palette("colorblind6")
+        palette = (np.asarray(palette) * 255).astype(np.uint8)
+    colors = palette[labels - 1]  # subtract background label
 
     return colors
 
@@ -127,7 +138,7 @@ def overlay_masks(image, predictions):
 
     for mask, color in zip(masks, colors):
         thresh = mask[0, :, :, None]
-        contours, hierarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_TC89_KCOS)
         image = cv.drawContours(image, contours, -1, color, 3)
 
     composite = image
@@ -170,8 +181,10 @@ def determine_dropout_rate(ckpt, args):
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--ckpt-file", type=Path, required=True, metavar="PATH", help="path to model checkpoint")
-    parser.add_argument("--image-file", type=Path, required=True, action="append", metavar="PATH", help="path to image used for prediction")
+    parser.add_argument("--image-dir", type=Path, metavar="PATH", help="path to directory of images used for prediction")
+    parser.add_argument("--image-file", type=Path, action="append", metavar="PATH", help="path to image used for prediction")
     parser.add_argument("--output-dir", type=Path, default="output/predictions", metavar="PATH", help="path to output directory")
+    parser.add_argument("--threshold", type=float, default=0.7, metavar="NUM", help="minimum score threshold for accepting predictions")
     parser.add_argument("--dropout-rate", type=float, default=None, metavar="NUM", help="forced dropout rate for stochastic sampling")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
 
