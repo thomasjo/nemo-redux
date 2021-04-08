@@ -3,8 +3,11 @@ from pathlib import Path
 
 import cv2 as cv
 import numpy as np
-import torch
+import pycocotools.coco
+import pycocotools.mask
 import seaborn
+import torch
+import torchvision
 
 from ignite.utils import convert_tensor
 from torchvision.transforms.functional import to_pil_image, to_tensor
@@ -59,8 +62,18 @@ def main(args):
         image = to_tensor(image)
         result, output, top_predictions = predict(image, model, args)
 
+        name_suffixes = [f"iou={args.iou_threshold}"]
+        if args.score_threshold is not None:
+            name_suffixes.append(f"score={args.score_threshold}")
+
+        output_name = "{}--{}{}".format(
+            image_file.stem,
+            "-".join(name_suffixes),
+            image_file.suffix,
+        )
+
         result = cv.cvtColor(result, cv.COLOR_RGB2BGR)
-        cv.imwrite(str(args.output_dir / image_file.name), result)
+        cv.imwrite(str(args.output_dir / output_name), result)
 
 
 def predict(image: torch.Tensor, model, args):
@@ -69,7 +82,11 @@ def predict(image: torch.Tensor, model, args):
         output = model([image.to(device=args.device)])
         output = convert_tensor(output, device="cpu")
 
-    top_predictions = select_top_predictions(output[0], args.threshold)
+    top_predictions = select_top_predictions(
+        output[0],
+        args.iou_threshold,
+        args.score_threshold,
+    )
 
     # TODO: Check if we need to copy the image tensor to keep it on the source device.
     result = np.asarray(to_pil_image(image.cpu()))
@@ -80,8 +97,27 @@ def predict(image: torch.Tensor, model, args):
     return result, output, top_predictions
 
 
-def select_top_predictions(predictions, threshold):
-    idx = torch.nonzero(predictions["scores"] > threshold, as_tuple=False).squeeze(1)
+def select_top_predictions(predictions, iou_threshold, score_threshold=None):
+    # Perform NMS on bounding boxes.
+    boxes = predictions["boxes"]
+    scores = predictions["scores"]
+    idx = torchvision.ops.nms(boxes, scores, iou_threshold)
+
+    # Perform NMS on segmentation masks' bounding boxes.
+    # NOTE: Ideally we would do this on the masks directly.
+    # TODO: Benchmark and optionally optimize this block.
+    masks = predictions["masks"].squeeze(1).ge(0.5).mul(255).byte()
+    masks = masks.permute(0, 2, 1).contiguous().permute(0, 2, 1)
+    masks = [pycocotools.mask.encode(m) for m in masks.numpy()]
+    mask_boxes = torch.as_tensor([pycocotools.mask.toBbox(m) for m in masks], dtype=torch.float32)
+    mask_idx = torchvision.ops.nms(mask_boxes, scores, iou_threshold)
+    idx = torch.as_tensor(np.intersect1d(idx, mask_idx))
+
+    # Threshold on confidence score.
+    if score_threshold is not None:
+        score_idx = torch.nonzero(scores > score_threshold, as_tuple=False).squeeze(1)
+        idx = torch.as_tensor(np.intersect1d(idx, score_idx))
+
     new_predictions = {}
     for k, v in predictions.items():
         new_predictions[k] = v[idx]
@@ -110,7 +146,7 @@ def overlay_boxes(image, predictions):
             It should contain the field `labels`.
     """
     labels = predictions["labels"]
-    boxes = predictions['boxes']
+    boxes = predictions["boxes"]
 
     colors = compute_colors_for_labels(labels).tolist()
 
@@ -158,7 +194,7 @@ def overlay_class_names(image, predictions):
     scores = predictions["scores"].tolist()
     labels = predictions["labels"].tolist()
     labels = [CATEGORIES[i] for i in labels]
-    boxes = predictions['boxes']
+    boxes = predictions["boxes"]
 
     template = "{}: {:.2f}"
     for box, score, label in zip(boxes, scores, labels):
@@ -184,7 +220,8 @@ def parse_args():
     parser.add_argument("--image-dir", type=Path, metavar="PATH", help="path to directory of images used for prediction")
     parser.add_argument("--image-file", type=Path, action="append", metavar="PATH", help="path to image used for prediction")
     parser.add_argument("--output-dir", type=Path, default="output/predictions", metavar="PATH", help="path to output directory")
-    parser.add_argument("--threshold", type=float, default=0.7, metavar="NUM", help="minimum score threshold for accepting predictions")
+    parser.add_argument("--iou-threshold", type=float, default=0.5, metavar="NUM", help="minimum bounding box IoU threshold for predictions")
+    parser.add_argument("--score-threshold", type=float, default=None, metavar="NUM", help="minimum classification score for predictions")
     parser.add_argument("--dropout-rate", type=float, default=None, metavar="NUM", help="forced dropout rate for stochastic sampling")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
 
