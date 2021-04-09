@@ -16,10 +16,10 @@ from nemo.models import initialize_detector
 
 CATEGORIES = [
     "BACKGROUND",
-    "agglutinated",
-    "benthic",
-    "planktic",
-    "sediment",
+    "A",
+    "B",
+    "P",
+    "S",
 ]
 
 DEFAULT_NUM_CLASSES = 1 + 4  # Background + default number of object categories
@@ -62,15 +62,13 @@ def main(args):
         image = to_tensor(image)
         result, output, top_predictions = predict(image, model, args)
 
-        name_suffixes = [f"iou={args.iou_threshold}"]
-        if args.score_threshold is not None:
-            name_suffixes.append(f"score={args.score_threshold}")
+        if args.rescale_factor is not None:
+            old_size = np.asarray(result.shape[:2])[::-1]
+            new_size = np.floor(old_size * args.rescale_factor).astype(int)
+            result = cv.resize(result, tuple(new_size))
 
-        output_name = "{}--{}{}".format(
-            image_file.stem,
-            "-".join(name_suffixes),
-            image_file.suffix,
-        )
+        name_suffix = args_suffixes(args)  # suffixed name based on relevant args
+        output_name = "{}--{}{}".format(image_file.stem, name_suffix, image_file.suffix)
 
         result = cv.cvtColor(result, cv.COLOR_RGB2BGR)
         cv.imwrite(str(args.output_dir / output_name), result)
@@ -90,9 +88,9 @@ def predict(image: torch.Tensor, model, args):
 
     # TODO: Check if we need to copy the image tensor to keep it on the source device.
     result = np.asarray(to_pil_image(image.cpu()))
-    result = overlay_boxes(result, top_predictions)
-    result = overlay_masks(result, top_predictions)
-    result = overlay_class_names(result, top_predictions)
+    result = overlay_boxes(result, top_predictions, args)
+    result = overlay_masks(result, top_predictions, args)
+    result = overlay_class_names(result, top_predictions, args)
 
     return result, output, top_predictions
 
@@ -137,7 +135,7 @@ def compute_colors_for_labels(labels, palette=None):
     return colors
 
 
-def overlay_boxes(image, predictions):
+def overlay_boxes(image, predictions, args):
     """
     Adds the predicted boxes on top of the image
     Arguments:
@@ -150,15 +148,19 @@ def overlay_boxes(image, predictions):
 
     colors = compute_colors_for_labels(labels).tolist()
 
+    thickness = 1
+    if args.rescale_factor is not None:
+        thickness = round(thickness / args.rescale_factor)
+
     for box, color in zip(boxes, colors):
         box = box.to(torch.int64)
         top_left, bottom_right = box[:2].tolist(), box[2:].tolist()
-        image = cv.rectangle(image, tuple(top_left), tuple(bottom_right), tuple(color), 1)
+        image = cv.rectangle(image, tuple(top_left), tuple(bottom_right), tuple(color), thickness)
 
     return image
 
 
-def overlay_masks(image, predictions):
+def overlay_masks(image, predictions, args):
     """
     Adds the instances contours for each predicted object.
     Each label has a different color.
@@ -172,17 +174,21 @@ def overlay_masks(image, predictions):
 
     colors = compute_colors_for_labels(labels).tolist()
 
+    thickness = 3
+    if args.rescale_factor is not None:
+        thickness = round(thickness / args.rescale_factor)
+
     for mask, color in zip(masks, colors):
         thresh = mask[0, :, :, None]
         contours, hierarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_TC89_KCOS)
-        image = cv.drawContours(image, contours, -1, color, 3)
+        image = cv.drawContours(image, contours, -1, color, thickness)
 
     composite = image
 
     return composite
 
 
-def overlay_class_names(image, predictions):
+def overlay_class_names(image, predictions, args):
     """
     Adds detected class names and scores in the positions defined by the
     top-left corner of the predicted bounding box
@@ -196,12 +202,26 @@ def overlay_class_names(image, predictions):
     labels = [CATEGORIES[i] for i in labels]
     boxes = predictions["boxes"]
 
-    template = "{}: {:.2f}"
+    font_scale = 0.5
+    thickness = 1
+    if args.rescale_factor is not None:
+        font_scale = font_scale / args.rescale_factor
+        thickness = round(thickness / args.rescale_factor)
+
     for box, score, label in zip(boxes, scores, labels):
         box = box.to(torch.int64)
         x, y = box[:2].tolist()
-        s = template.format(label, score)
-        cv.putText(image, s, (x, y), cv.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1)
+
+        cv.putText(
+            image,
+            "{}: {:.2f}".format(label, score),
+            (x, y - 5),  # offset the text vertically
+            cv.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (255, 255, 255),
+            thickness,
+            cv.LINE_AA,
+        )
 
     return image
 
@@ -214,6 +234,13 @@ def determine_dropout_rate(ckpt, args):
     return dropout_rate
 
 
+def args_suffixes(args):
+    name_suffixes = [f"iou={args.iou_threshold}"]
+    if args.score_threshold is not None:
+        name_suffixes.append(f"score={args.score_threshold}")
+    return "-".join(name_suffixes)
+
+
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--ckpt-file", type=Path, required=True, metavar="PATH", help="path to model checkpoint")
@@ -223,6 +250,7 @@ def parse_args():
     parser.add_argument("--iou-threshold", type=float, default=0.5, metavar="NUM", help="minimum bounding box IoU threshold for predictions")
     parser.add_argument("--score-threshold", type=float, default=None, metavar="NUM", help="minimum classification score for predictions")
     parser.add_argument("--dropout-rate", type=float, default=None, metavar="NUM", help="forced dropout rate for stochastic sampling")
+    parser.add_argument("--rescale-factor", type=float, default=None, metavar="NUM", help="rescale factor for output image dimensions")
     parser.add_argument("--device", type=torch.device, metavar="NAME", default="cuda", help="device to use for model training")
 
     return parser.parse_args()
