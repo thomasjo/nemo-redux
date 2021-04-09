@@ -24,7 +24,7 @@ def main(args):
         ensure_reproducibility(seed=args.seed)
 
     # Append timestamp to output directory.
-    args.output_dir = timestamp_path(args.output_dir)
+    # args.output_dir = timestamp_path(args.output_dir)
     args.output_dir.mkdir(parents=True)
 
     subset_indices = range(DEV_MODE_BATCHES) if args.dev_mode else None
