@@ -9,7 +9,7 @@ import torch
 
 from nemo.datasets import detection_dataloaders
 from nemo.models import initialize_detector
-from nemo.utils import ensure_reproducibility, redirect_output, timestamp_path, torch_num_threads
+from nemo.utils import ensure_reproducibility, redirect_output, torch_num_threads
 from nemo.vendor.torchvision.coco_eval import CocoEvaluator
 from nemo.vendor.torchvision.coco_utils import convert_to_coco_api
 
