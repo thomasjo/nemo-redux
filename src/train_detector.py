@@ -26,13 +26,6 @@ DEFAULT_DATA_DIR = Path("data/segmentation-resized/partitioned/combined")
 DEV_MODE_BATCHES = 2
 MAX_MASK_IMAGES = 10
 
-CLASS_COLORS = [
-    [215, 25, 28],  # agglutinated
-    [253, 174, 97],  # benthic
-    [171, 217, 233],  # planktic
-    [44, 123, 182],  # sediment
-]
-
 
 def main(args):
     # Use fixed random seed if requested.
@@ -51,7 +44,9 @@ def main(args):
 
     image_mean, image_std = dataset_moments(args)
 
+    # Only use a subset of data in dev mode.
     subset_indices = range(DEV_MODE_BATCHES) if args.dev_mode else None
+
     train_dataloader, test_dataloader, num_classes = detection_dataloaders(
         args.data_dir,
         subset_indices=subset_indices,
@@ -129,9 +124,6 @@ def main(args):
     def run_evaluator(engine: Engine):
         evaluator.run(test_dataloader)
 
-    # if torch.cuda.is_available():
-    #     trainer.add_event_handler(Events.EPOCH_COMPLETED, empty_cuda_cache)
-
     # COCO evaluation scores.
     # -----------------------
     @evaluator.on(Events.STARTED)
@@ -177,8 +169,7 @@ def main(args):
 
 
 def initialize_optimizer(model, args):
-    parameters = filter(lambda p: p.requires_grad, model.parameters())
-    # parameters = model.parameters()
+    parameters = model.parameters()
 
     if args.optimizer == "adam":
         optimizer = optim.Adam(parameters, lr=args.learning_rate, weight_decay=args.weight_decay)
@@ -298,6 +289,7 @@ def prepare_coco_scores(coco_evaluator: CocoEvaluator, tag="validation"):
 
 def dataset_moments(args):
     if args.normalize:
+        # TODO: Load (or compute) this based on the dataset.
         return (0.141, 0.142, 0.140), (0.150, 0.137, 0.123)
 
     return None, None
