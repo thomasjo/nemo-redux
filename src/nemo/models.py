@@ -91,12 +91,10 @@ def initialize_detector(
         image_std=image_std,
     )
 
-    # Use box head with dropout sampling support.
-    model.roi_heads.box_head = StochasticTwoMLPHead(
-        model.roi_heads.box_head.fc6.in_features,
-        model.roi_heads.box_head.fc7.out_features,
-        dropout_rate=dropout_rate,
-    )
+    # Customize box head only when necessary.
+    if dropout_rate > 0:
+        # Replace box head with one that has dropout sampling support.
+        model.roi_heads.box_head = stochastic_box_head(model.roi_heads.box_head, dropout_rate)
 
     # Customize box predictor.
     in_features = model.roi_heads.box_predictor.cls_score.in_features
@@ -108,3 +106,17 @@ def initialize_detector(
     model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
 
     return model
+
+
+def stochastic_box_head(box_head, dropout_rate):
+    stochastic_box_head = StochasticTwoMLPHead(
+        box_head.fc6.in_features,
+        box_head.fc7.out_features,
+        dropout_rate,
+    )
+
+    # Copy old parameter values.
+    state = box_head.state_dict()
+    stochastic_box_head.load_state_dict(state)
+
+    return stochastic_box_head
