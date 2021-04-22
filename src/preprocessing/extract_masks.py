@@ -123,11 +123,13 @@ def extract_masks(
         regions = to_regions(contours, category_id)
 
         if debug_mode:
-            image_contours = cv.fillPoly(image.copy(), contours, [127, 0, 255])
-            image_overlay = cv.addWeighted(image_contours, 0.5, image, 0.5, 0)
+            save_image(output_file, mask_image, postfix="mask")
+
+            image_contours = cv.fillPoly(raw_image.copy(), contours, [127, 0, 255])
+            image_overlay = cv.addWeighted(image_contours, 0.5, raw_image, 0.5, 0)
             save_image(output_file, image_overlay, postfix="contour")
 
-            image_orig_contours = cv.fillPoly(image.copy(), orig_contours, [127, 0, 255])
+            image_orig_contours = cv.fillPoly(raw_image.copy(), orig_contours, [127, 0, 255])
             image_diff_contours = cv.absdiff(image_contours, image_orig_contours)
             _, image_diff_contours = cv.threshold(image_diff_contours, 0, 255, cv.THRESH_BINARY)
             save_image(output_file, image_diff_contours, postfix="diff")
