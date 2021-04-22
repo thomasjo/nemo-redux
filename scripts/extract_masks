@@ -33,7 +33,7 @@ allowlist=(
 
 # 2019-06
 # -------
-if [[ " ${allowlist[*]} " =~ "2019-06" ]]; then
+if contains allowlist "2019-06"; then
   # dims: [3772, 3602]
   # mean: 3687
 
