@@ -31,7 +31,7 @@ pandas = { version = "^1.2.3", optional = true }
 seaborn = { version = "^0.11.1", optional = true }
 
 matplotlib = "^3.3.3"
-numpy = "^1.19.5"
+numpy = "^1.22.0"
 opencv-python-headless = "^4.5.1.48"
 pillow = "^8.1.0"
 pycocotools = "^2.0.2"
